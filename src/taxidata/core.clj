@@ -1,15 +1,17 @@
 (ns taxidata.core
   (:require [clj-time.core :as dttm]
-            [clj-time.format :as dttm_f]))
+            [clj-time.format :as dttm_f]
+            [kixi.stats.core :as stats]
+            ))
 
 ;NOTE: it munges the trip_type keys into any order
 
 (def filename "data/trip_2016_06-100.csv")
+(def filename-all "data/yellow_tripdata_2016-06.csv")
 
 
 (def to_int #(Integer. %))
 (def to_dec #(Double. %))
-;(def to_dttm #(str %)) ; NOTE: mysql formatter is YYYYMMDD HH:mm::ss
 (def to_dttm #(dttm_f/parse (dttm_f/formatters :mysql) %)) ; NOTE: mysql formatter is YYYYMMDD HH:mm::ss
 
 ; the functions that casts these values as the proper type
@@ -55,5 +57,43 @@
                  (map vector trip_header unmapped-row)))
        rows))
 
-; this is broken around here
-(last (mapify (read_trip_file (slurp filename))))
+;(def mapfied-trips (mapify (read_trip_file (slurp filename))))
+
+(defn calc-sum
+  "Take a file and mapify"
+  ([]
+   (reduce + (map :tip_amount mapfied-trips)))
+  ([column]
+   (reduce + (map column mapfied-trips)))
+  ([column n]
+   (reduce + (map column (take n mapfied-trips)))))
+
+; TODO: take into account missing fields
+(defn calc-count
+  ""
+  ([n]
+   (count (take n mapfied-trips)))
+  ([]
+   (count mapfied-trips)))
+
+(defn calc-mean
+  "calculate a simple mean"
+  [column]
+  (->> mapfied-trips (transduce (map column) stats/mean)))
+
+(defn calc-stddev
+  "calculate a simple mean"
+  [column]
+  (->> mapfied-trips (transduce (map column) stats/standard-deviation)))
+
+(defn extreme?
+  "determines if amount is unreasonable to include in analysis. For now extreme
+  is defined as 3 times the standard deviation"
+
+  [column value]
+  (> value (* 3 (calc-stddev column)))) ; TODO: magic number 3 is conventional but not easy to change in this code
+
+(def extreme-tip-amount? #(extreme? :tip_amount %))
+
+; This will run in a console to find extreme values:
+;(group-by extreme-tip-amount? (map :tip_amount mapfied-trips))

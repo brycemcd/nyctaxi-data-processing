@@ -5,4 +5,5 @@
             :url ""}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [clj-time "0.13.0"]
+                 [kixi/stats "0.3.8"]
                  ])
