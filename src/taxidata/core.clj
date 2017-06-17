@@ -86,6 +86,7 @@
   ([]
    (count mapfied-trips)))
 
+; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/01_primitive-data/1-20_simple-statistics.asciidoc
 (defn calc-mean
   "calculate a simple mean of a collection"
   [coll]
@@ -108,16 +109,6 @@
            (- total 1))
         (Math/sqrt))))
 
-(defn extreme?
-  "determines if amount is unreasonable to include in analysis. For now extreme
-  is defined as 3 times the standard deviation"
-
-  [column value]
-  (> value (* 3 (calc-stddev column)))) ; TODO: magic number 3 is conventional but not easy to change in this code
-
-(def extreme-tip-amount? #(extreme? :tip_amount %))
-
-
 ; IMPORT AND PREPARE DATA
 (defn split-row
   "splits a csv row on the comma"
@@ -125,6 +116,8 @@
   (clojure.string/split row #","))
 
 (defn import-file
+  "imports a file and converts each row into a map with properly typed values.
+  Returns a lazy sequence of file rows"
   [file]
   (letfn [(helper [rdr]
             (lazy-seq
@@ -135,6 +128,54 @@
                   nil))))]
     (helper (clojure.java.io/reader file))))
 
+; AUDIT ROWS
+(defn extreme?
+  "determines if amount is unreasonable to include in analysis. For now extreme
+  is defined as 3 times the standard deviation"
+  ; TODO: magic number 3 is conventional with respect to a normal distribution
+  ; but non verification has been done to confirm the values in this data are
+  ; normal. Be sure to update the README if validity criteria change
+  [value mean stddev]
+  (> value (* 3 (+ mean stddev))))
+(def not-extreme? (complement extreme?))
+;(def extreme-tip-amount? #(extreme? :tip_amount %))
+
+(defn wtf
+  [value auditfx passed-list failed-list]
+  (if (auditfx value)
+    [(cons value passed-list) failed-list]
+    [passed-list (cons value failed-list)]))
+
+(defn audit-rows
+  "Takes in a lazy sequence of rows. Returns two lists. One for valid rows
+  and the other of invalid rows"
+  ; TODO: needs refactoring. I'm stumbling through this. Lots of debug statements
+  ; start with "tip_amount" column and then abstract to all"
+  [imported-rows]
+  (let [mean   (calc-mean (map :tip_amount imported-rows))
+        stddev (calc-stddev (map :tip_amount imported-rows))
+        passesaudit? #(not-extreme? % mean stddev)
+        passed-list '()
+        failed-list '()
+        ]
+
+      (println mean)
+      (println stddev)
+
+      (loop [values (seq (map :tip_amount imported-rows))
+             [passed failed] (wtf (first values) passesaudit? passed-list failed-list)
+             ]
+        (if (next values)
+          (do
+            (println passed)
+            (println failed)
+            (println (count (next values)))
+            (recur (next values) (wtf (first values) passesaudit? passed failed)))
+          (println [passed failed])))
+      ))
+
 ; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
+; (def first10 (take 10 (import-file filename100)))
+; (audit-rows first10)
