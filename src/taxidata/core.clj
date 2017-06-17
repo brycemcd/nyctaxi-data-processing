@@ -3,7 +3,6 @@
             [clj-time.format :as dttm_f]
             [kixi.stats.core :as stats]
             ))
-
 (declare mapify)
 
 ;NOTE: it munges the trip_type keys into any order
@@ -11,7 +10,6 @@
 (def filename100 "data/trip_2016_06-100.csv")
 (def filenameAll "data/yellow_tripdata_2016-06.csv")
 
-;(def mapfied-trips (mapify (read_trip_file (slurp filename))))
 ;(def mapified-trips (with-open [r (clojure.java.io/input-stream filename)]
                     ;(loop [c (.read r)]
                       ;(if (not= c -1)
@@ -51,20 +49,20 @@
   (map #(clojure.string/split % #",")
        (clojure.string/split rows #"\r\n")))
 
-(defn convert
+
+(defn convert-value
   "converts a string into the right value of the trip data"
   [trip_key value]
   ((get (into {} trip_types) trip_key) value))
 
-(defn mapify
-  [rows]
-  (map (fn [unmapped-row]
-         (reduce (fn [row-map [trip_key value]]
-                   (assoc row-map trip_key (convert trip_key value)))
-                 {}
-                 (map vector trip_header unmapped-row)))
-       rows))
-
+(defn convert-row
+  "Takes in a raw imported row of trip data and returns the row with the values
+  coerced into the proper data type"
+  [row]
+  (reduce (fn [row-map [trip-key value]]
+            (assoc row-map trip-key (convert-value trip-key value)))
+          {}
+          (into [] row)))
 
 ; BASIC MATHS
 ; The calc-functions here are designed to provide easily accessible calculations
@@ -96,8 +94,8 @@
     (if (pos? cnt)
       (/ sum cnt)
       0)))
-  ;(->> mapfied-trips (transduce (map column) stats/mean)))
 
+; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/01_primitive-data/1-20_simple-statistics.asciidoc
 (defn calc-stddev
   "calculate the stddev of a collection"
   [coll]
@@ -120,27 +118,23 @@
 (def extreme-tip-amount? #(extreme? :tip_amount %))
 
 
-(defn mapify-row
-  [rows]
-  (map #(clojure.string/split % #",") rows))
+; IMPORT AND PREPARE DATA
+(defn split-row
+  "splits a csv row on the comma"
+  [row]
+  (clojure.string/split row #","))
 
-(defn mapified-trips
-  [fname]
-  (let [x 1]
-    (with-open [rdr (clojure.java.io/reader fname)]
-      (doseq [line (line-seq rdr)]
-        (+ x (to_int (first (mapify-row line))))))
-    (println x)))
-
-(defn lazy-file-lines
+(defn import-file
   [file]
   (letfn [(helper [rdr]
             (lazy-seq
               (if-let [line (.readLine rdr)]
-                (cons line (helper rdr))
+                (cons (convert-row (zipmap trip_header (split-row line))) (helper rdr))
                 (do
                   (.close rdr)
                   nil))))]
     (helper (clojure.java.io/reader file))))
 
+; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
+; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
