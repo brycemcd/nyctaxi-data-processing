@@ -68,23 +68,7 @@
 ; The calc-functions here are designed to provide easily accessible calculations
 ; useful for verifying and auditing rows later
 
-; TODO: remove the column arguments and just calc a sum on the collection
-(defn calc-sum
-  "Take a file and mapify"
-  ([]
-   (reduce + (map :tip_amount mapfied-trips)))
-  ([column]
-   (reduce + (map column mapfied-trips)))
-  ([column n]
-   (reduce + (map column (take n mapfied-trips)))))
-
 ; TODO: take into account missing fields
-(defn calc-count
-  ""
-  ([n]
-   (count (take n mapfied-trips)))
-  ([]
-   (count mapfied-trips)))
 
 ; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/01_primitive-data/1-20_simple-statistics.asciidoc
 (defn calc-mean
@@ -128,52 +112,61 @@
                   nil))))]
     (helper (clojure.java.io/reader file))))
 
-; AUDIT ROWS
-(defn extreme?
-  "determines if amount is unreasonable to include in analysis. For now extreme
+; VERIFY ROWS
+; NOTE: the approach for verifying is to take the raw row and pass over a series
+; of filters that will detect anomalous values. If a row is found to have values
+; within our tolerances, then a {:valid true} map is appended to the row.
+; {:verified true} is added to the row after all validations step complete
+
+(defn extreme-numeric?
+  "determines if value is reasonable to include in analysis. For now extreme
   is defined as 3 times the standard deviation"
   ; TODO: magic number 3 is conventional with respect to a normal distribution
   ; but non verification has been done to confirm the values in this data are
   ; normal. Be sure to update the README if validity criteria change
   [value mean stddev]
   (> value (* 3 (+ mean stddev))))
-(def not-extreme? (complement extreme?))
-;(def extreme-tip-amount? #(extreme? :tip_amount %))
 
-(defn wtf
-  [value auditfx passed-list failed-list]
-  (if (auditfx value)
-    [(cons value passed-list) failed-list]
-    [passed-list (cons value failed-list)]))
+(def not-extreme-numeric? (complement extreme-numeric?))
 
-(defn audit-rows
-  "Takes in a lazy sequence of rows. Returns two lists. One for valid rows
-  and the other of invalid rows"
+; FIXME: I don't quite have this right. I want to be able to run validity
+; functions indempotently and NOT overwrite a :valid false with a :valid true
+; and cause problems later when an invalid row is overwritten with false
+
+; needs to contain key && mapkey && have key be false to skip, else process
+; TODO: refactor this. I'm incredibly distracted (penny is singing at the top
+; of her lungs in the tub) and trying to just get this function correct
+(defn add-valid-for-numeric!
+  "adds {:valid false} for a numeric key iff validity check fails"
+  [mapkey row verified-fx?]
+  (if (> (mapkey row) 20)
+    (assoc row :valid false)
+    row))
+
+(defn audit-numeric-column
+  [imported-rows column]
+  (let [mean   (calc-mean (map column imported-rows))
+        stddev (calc-stddev (map column imported-rows))
+        passesaudit? #(not-extreme-numeric? % mean stddev)
+        ]
+    (println (str "calling on " column))
+    (map (fn [row] (add-valid-for-numeric! column row passesaudit?)) imported-rows)))
+
+(defn audit-numerics
+  "Takes in a lazy sequence of rows and verifies values are not extreme"
   ; TODO: needs refactoring. I'm stumbling through this. Lots of debug statements
   ; start with "tip_amount" column and then abstract to all"
   [imported-rows]
-  (let [mean   (calc-mean (map :tip_amount imported-rows))
-        stddev (calc-stddev (map :tip_amount imported-rows))
-        passesaudit? #(not-extreme? % mean stddev)
-        passed-list '()
-        failed-list '()
-        ]
+  ;(loop [mapkeys (seq )
+         ;rows (take 10 imported-rows)]
+   (loop [mapkeys [:tip_amount :trip_distance :fare_amount :extra :mta_tax :tip_amount :tolls_amount :total_amount]
+          rows imported-rows]
 
-      (println mean)
-      (println stddev)
+    (if (first mapkeys)
+      (recur (rest mapkeys) (audit-numeric-column rows (first mapkeys)) )
+      rows)))
 
-      (loop [values (seq (map :tip_amount imported-rows))
-             [passed failed] (wtf (first values) passesaudit? passed-list failed-list)
-             ]
-        (if (next values)
-          (do
-            (println passed)
-            (println failed)
-            (println (count (next values)))
-            (recur (next values) (wtf (first values) passesaudit? passed failed)))
-          (println [passed failed])))
-      ))
-
+      ;(recur( (rest mapkeys) (take 10 imported-rows) )) ;(map #(audit-numeric-column % (first mapkeys)) rows))))
 ; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
