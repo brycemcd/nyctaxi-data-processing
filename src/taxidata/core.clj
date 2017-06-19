@@ -83,7 +83,7 @@
 ; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/01_primitive-data/1-20_simple-statistics.asciidoc
 (defn calc-stddev
   "calculate the stddev of a collection"
-  [coll]
+  ([coll]
   (let [avg (calc-mean coll)
         squares (for [x coll]
                   (let [x-avg (- x avg)]
@@ -92,6 +92,15 @@
     (-> (/ (apply + squares)
            (- total 1))
         (Math/sqrt))))
+  ([col avg]
+   (let [squares (for [x coll]
+                   (let [x-avg (- x avg)]
+                     (* x-avg x-avg)))
+         total (count coll)]
+     (-> (/ (apply + squares)
+            (- total 1))
+         (Math/sqrt)))))
+
 
 ; IMPORT AND PREPARE DATA
 (defn split-row
@@ -118,12 +127,15 @@
 ; within our tolerances, then a {:valid true} map is appended to the row.
 ; {:verified true} is added to the row after all validations step complete
 
+; This is VERY innefficient right now. I'm just learning clojure and focusing on
+; getting my head around using the data structures and functions properly
+
 (defn extreme-numeric?
   "determines if value is reasonable to include in analysis. For now extreme
-  is defined as 3 times the standard deviation"
-  ; TODO: magic number 3 is conventional with respect to a normal distribution
-  ; but non verification has been done to confirm the values in this data are
-  ; normal. Be sure to update the README if validity criteria change
+  is defined as 3 times the standard deviation. Magic number 3 is conventional
+  with respect to a normal distribution but non verification has been done to
+  confirm the values in this data are normal. Be sure to update the README if
+  validity criteria change"
   [value mean stddev]
   (> value (* 3 (+ mean stddev))))
 
@@ -139,36 +151,40 @@
 (defn add-valid-for-numeric!
   "adds {:valid false} for a numeric key iff validity check fails"
   [mapkey row verified-fx?]
-  (if (> (mapkey row) 20)
-    (assoc row :valid false)
-    row))
+  (if (verified-fx? (mapkey row))
+    row
+    (assoc row :valid false)))
 
-(defn audit-numeric-column
-  [imported-rows column]
+(defn audit-numeric-column!
+  [column imported-rows]
   (let [mean   (calc-mean (map column imported-rows))
-        stddev (calc-stddev (map column imported-rows))
+        stddev (calc-stddev (map column imported-rows) mean)
         passesaudit? #(not-extreme-numeric? % mean stddev)
         ]
-    (println (str "calling on " column))
     (map (fn [row] (add-valid-for-numeric! column row passesaudit?)) imported-rows)))
 
 (defn audit-numerics
   "Takes in a lazy sequence of rows and verifies values are not extreme"
-  ; TODO: needs refactoring. I'm stumbling through this. Lots of debug statements
-  ; start with "tip_amount" column and then abstract to all"
-  [imported-rows]
-  ;(loop [mapkeys (seq )
-         ;rows (take 10 imported-rows)]
-   (loop [mapkeys [:tip_amount :trip_distance :fare_amount :extra :mta_tax :tip_amount :tolls_amount :total_amount]
-          rows imported-rows]
+  ([raw-rows]
+   ; TODO: be able to pull out numeric rows from trip_types above
+   (recur raw-rows [:tip_amount :trip_distance :fare_amount :extra :mta_tax :tip_amount :tolls_amount :total_amount]))
+  ([raw-rows mapkeys]
+     (println (str "running " (first mapkeys)))
+     (if (first mapkeys)
+       (recur (rest mapkeys) (audit-numeric-column! (first mapkeys) raw-rows) )
+       rows)))
+          ;rows raw-rows] 
+     ;(println (str "running " (first mapkeys)))
+     ;(if (first mapkeys)
+       ;(recur (rest mapkeys) (audit-numeric-column (first mapkeys) rows) )
+       ;rows)))
 
-    (if (first mapkeys)
-      (recur (rest mapkeys) (audit-numeric-column rows (first mapkeys)) )
-      rows)))
 
-      ;(recur( (rest mapkeys) (take 10 imported-rows) )) ;(map #(audit-numeric-column % (first mapkeys)) rows))))
 ; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (def first10 (take 10 (import-file filename100)))
 ; (audit-rows first10)
+
+; (def allrecords (import-file filenameAll))
+; (time (map :valid (audit-numerics allrecords)))
