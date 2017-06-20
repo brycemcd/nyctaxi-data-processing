@@ -16,9 +16,17 @@
                         ;(do
                           ;(print (char c))
                           ;(recur (.read r)))))))
-(def to_int #(Integer. %))
-(def to_dec #(Double. %))
-(def to_dttm #(dttm_f/parse (dttm_f/formatters :mysql) %)) ; NOTE: mysql formatter is YYYYMMDD HH:mm::ss
+(defn to_int
+  [value]
+  (Integer. value))
+
+(defn to_dec
+  [value]
+  (Double. value))
+
+(defn to_dttm
+  [value]
+  (dttm_f/parse (dttm_f/formatters :mysql) value)) ; NOTE: mysql formatter is YYYYMMDD HH:mm::ss
 
 ; the functions that casts these values as the proper type
 (def trip_types [[:vendor_id to_int]
@@ -42,13 +50,6 @@
                 [:total_amount to_dec]])
 
 (def trip_header (map first trip_types))
-
-(defn read_trip_file
-  "Reads a trip file and parses it"
-  [rows]
-  (map #(clojure.string/split % #",")
-       (clojure.string/split rows #"\r\n")))
-
 
 (defn convert-value
   "converts a string into the right value of the trip data"
@@ -92,13 +93,14 @@
     (-> (/ (apply + squares)
            (- total 1))
         (Math/sqrt))))
-  ([col avg]
+  ([coll avg]
    (let [squares (for [x coll]
                    (let [x-avg (- x avg)]
                      (* x-avg x-avg)))
          total (count coll)]
      (-> (/ (apply + squares)
-            (- total 1))
+            ;FIXME divide by 0 error(- total 1))
+            (+ total 1))
          (Math/sqrt)))))
 
 
@@ -148,37 +150,40 @@
 ; needs to contain key && mapkey && have key be false to skip, else process
 ; TODO: refactor this. I'm incredibly distracted (penny is singing at the top
 ; of her lungs in the tub) and trying to just get this function correct
+
 (defn add-valid-for-numeric!
   "adds {:valid false} for a numeric key iff validity check fails"
-  [mapkey row verified-fx?]
+  [row mapkey verified-fx?]
   (if (verified-fx? (mapkey row))
     row
     (assoc row :valid false)))
 
 (defn audit-numeric-column!
-  [column imported-rows]
+  [imported-rows column]
   (let [mean   (calc-mean (map column imported-rows))
         stddev (calc-stddev (map column imported-rows) mean)
         passesaudit? #(not-extreme-numeric? % mean stddev)
         ]
-    (map (fn [row] (add-valid-for-numeric! column row passesaudit?)) imported-rows)))
+    (map (fn [row] (add-valid-for-numeric! row column passesaudit?)) imported-rows)))
 
 (defn audit-numerics
   "Takes in a lazy sequence of rows and verifies values are not extreme"
   ([raw-rows]
    ; TODO: be able to pull out numeric rows from trip_types above
-   (recur raw-rows [:tip_amount :trip_distance :fare_amount :extra :mta_tax :tip_amount :tolls_amount :total_amount]))
+   (audit-numerics raw-rows [:tip_amount
+                             :trip_distance
+                             :fare_amount
+                             :extra
+                             :mta_tax
+                             :tip_amount
+                             :tolls_amount
+                             :total_amount]))
   ([raw-rows mapkeys]
-     (println (str "running " (first mapkeys)))
      (if (first mapkeys)
-       (recur (rest mapkeys) (audit-numeric-column! (first mapkeys) raw-rows) )
-       rows)))
-          ;rows raw-rows] 
-     ;(println (str "running " (first mapkeys)))
-     ;(if (first mapkeys)
-       ;(recur (rest mapkeys) (audit-numeric-column (first mapkeys) rows) )
-       ;rows)))
-
+       (do
+         (println (str "running " (first mapkeys)))
+         (recur (audit-numeric-column! raw-rows (first mapkeys)) (rest mapkeys)))
+       raw-rows)))
 
 ; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
