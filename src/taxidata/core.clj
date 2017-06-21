@@ -132,6 +132,7 @@
 ; This is VERY innefficient right now. I'm just learning clojure and focusing on
 ; getting my head around using the data structures and functions properly
 
+; 1. Numerics
 (defn extreme-numeric?
   "determines if value is reasonable to include in analysis. For now extreme
   is defined as 3 times the standard deviation. Magic number 3 is conventional
@@ -184,6 +185,36 @@
          (println (str "running " (first mapkeys)))
          (recur (audit-numeric-column! raw-rows (first mapkeys)) (rest mapkeys)))
        raw-rows)))
+
+; 2. enums
+
+(def valid-vendor-values #{1 2} )
+
+(defn audit-vendor-id
+  "According to the docs, vendor id should be a 1 or 2. Other values are
+  invalid"
+  [rows]
+  (map
+    (fn
+      [row]
+      (if (contains? valid-vendor-values (:vendor_id row))
+        row
+        (assoc row :valid false)))
+     rows))
+
+(def valid-rate-code-ids (into #{} (range 1 7))) ; NOTE: 1-6
+
+(defn audit-enum-rate-code
+  "According to the docs, vendor id should be a 1 or 2. Other values are
+  invalid"
+  [rows]
+  (map
+    (fn
+      [row]
+      (if (contains? valid-rate-code-ids (:rate_code_id  row))
+        row
+        (assoc row :valid false)))
+     rows))
 
 ; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
