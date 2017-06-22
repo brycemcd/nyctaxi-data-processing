@@ -171,7 +171,11 @@
   "Takes in a lazy sequence of rows and verifies values are not extreme"
   ([raw-rows]
    ; TODO: be able to pull out numeric rows from trip_types above
-   (audit-numerics raw-rows [:tip_amount
+   (audit-numerics raw-rows [:pickup_longitude
+                             :pickup_latitude
+                             :dropoff_longitude
+                             :dropoff_latitude
+                             :tip_amount
                              :trip_distance
                              :fare_amount
                              :tip_amount
@@ -195,7 +199,7 @@
 (def valid-payment-types (into #{} (range 1 7))) ; NOTE: 1-6
 
 (defn audit-enum
-  "Validates rows whose columns should be specified values"
+  "Validates rows whose columns should be specified, discrete, values"
   ([rows]
    (audit-enum rows [
                      [valid-vendor-values :vendor_id]
@@ -210,6 +214,7 @@
    (let [ [valid-enum-fx mapkey] (first validations)]
      (if valid-enum-fx
        (do
+         ; TODO: convert this to a log entry
          (println mapkey)
          (recur (map
                   (fn
@@ -219,6 +224,29 @@
                       (assoc row :valid false)))
                   rows) (rest validations)))
        rows))))
+
+; 3. total row validation
+; TODO: some check should happen to validate that the fare, time in cab
+; and distance relationship is somewhat rational
+
+(defn dropoff-after-pickup?
+  "Asserts that pickup occurred after dropoff"
+  [row]
+  (.isBefore (:tpep_pickup_datetime row) (:tpep_dropoff_datetime row)))
+
+(defn audit-row-relationship
+  [row]
+  (if (dropoff-after-pickup? row)
+    row
+    (assoc row :valid false)))
+
+(defn audit-row-relationship
+  "validates that relationships of values in the rows makes sense"
+  [rows]
+  (map audit-row-relationship rows))
+
+; TODO make a function that takes in a file and runs all the validations
+
 ; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
@@ -226,4 +254,5 @@
 ; (audit-rows first10)
 
 ; (def allrecords (import-file filenameAll))
+; (def records100 (import-file filename100))
 ; (time (map :valid (audit-numerics allrecords)))
