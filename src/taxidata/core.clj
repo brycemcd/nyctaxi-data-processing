@@ -40,7 +40,7 @@
                 [:store_and_fwd_flag identity]
                 [:dropoff_longitude to_dec]
                 [:dropoff_latitude to_dec]
-                [:payment_type identity]
+                [:payment_type to_int]
                 [:fare_amount to_dec]
                 [:extra to_dec]
                 [:mta_tax to_dec]
@@ -174,8 +174,6 @@
    (audit-numerics raw-rows [:tip_amount
                              :trip_distance
                              :fare_amount
-                             :extra
-                             :mta_tax
                              :tip_amount
                              :tolls_amount
                              :total_amount]))
@@ -188,34 +186,39 @@
 
 ; 2. enums
 
-(def valid-vendor-values #{1 2} )
-
-(defn audit-vendor-id
-  "According to the docs, vendor id should be a 1 or 2. Other values are
-  invalid"
-  [rows]
-  (map
-    (fn
-      [row]
-      (if (contains? valid-vendor-values (:vendor_id row))
-        row
-        (assoc row :valid false)))
-     rows))
-
+(def valid-vendor-values #{1 2})
+(def valid-improvement-surcharge  #{0.0 0.3})
+(def valid-mta-tax #{0.5})
+(def valid-extra #{0.5 1.0})
+(def valid-store-and-forward-flags  #{"N" "Y"})
 (def valid-rate-code-ids (into #{} (range 1 7))) ; NOTE: 1-6
+(def valid-payment-types (into #{} (range 1 7))) ; NOTE: 1-6
 
-(defn audit-enum-rate-code
-  "According to the docs, vendor id should be a 1 or 2. Other values are
-  invalid"
-  [rows]
-  (map
-    (fn
-      [row]
-      (if (contains? valid-rate-code-ids (:rate_code_id  row))
-        row
-        (assoc row :valid false)))
-     rows))
-
+(defn audit-enum
+  "Validates rows whose columns should be specified values"
+  ([rows]
+   (audit-enum rows [
+                     [valid-vendor-values :vendor_id]
+                     [valid-improvement-surcharge :improvement_surcharge]
+                     [valid-mta-tax :mta_tax]
+                     [valid-extra :extra]
+                     [valid-store-and-forward-flags :store_and_fwd_flag]
+                     [valid-rate-code-ids :ratecode_id]
+                     [valid-payment-types :payment_type]
+                     ]))
+  ([rows validations]
+   (let [ [valid-enum-fx mapkey] (first validations)]
+     (if valid-enum-fx
+       (do
+         (println mapkey)
+         (recur (map
+                  (fn
+                    [row]
+                    (if (contains? valid-enum-fx (mapkey row))
+                      row
+                      (assoc row :valid false)))
+                  rows) (rest validations)))
+       rows))))
 ; SCRATCHPAD
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
