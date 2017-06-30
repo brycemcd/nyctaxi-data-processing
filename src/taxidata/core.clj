@@ -3,6 +3,7 @@
             [clj-time.format :as dttm_f]
             [kixi.stats.core :as stats]
             ))
+
 (declare mapify)
 
 ;NOTE: it munges the trip_type keys into any order
@@ -51,19 +52,7 @@
 
 (def trip_header (map first trip_types))
 
-(defn convert-value
-  "converts a string into the right value of the trip data"
-  [trip_key value]
-  ((get (into {} trip_types) trip_key) value))
 
-(defn convert-row
-  "Takes in a raw imported row of trip data and returns the row with the values
-  coerced into the proper data type"
-  [row]
-  (reduce (fn [row-map [trip-key value]]
-            (assoc row-map trip-key (convert-value trip-key value)))
-          {}
-          (into [] row)))
 
 ; BASIC MATHS
 ; The calc-functions here are designed to provide easily accessible calculations
@@ -79,36 +68,43 @@
         cnt (count coll)]
     (if (pos? cnt)
       (/ sum cnt)
-      0)))
+      0.0)))
 
-; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/01_primitive-data/1-20_simple-statistics.asciidoc
+(defn- x-avg-squared
+  [x avg]
+  (* (- x avg) (- x avg)))
+
 (defn calc-stddev
   "calculate the stddev of a collection"
   ([coll]
-  (let [avg (calc-mean coll)
-        squares (for [x coll]
-                  (let [x-avg (- x avg)]
-                    (* x-avg x-avg)))
-        total (count coll)]
-    (-> (/ (apply + squares)
-           (- total 1))
-        (Math/sqrt))))
+   (calc-stddev coll (calc-mean coll)))
   ([coll avg]
-   (let [squares (for [x coll]
-                   (let [x-avg (- x avg)]
-                     (* x-avg x-avg)))
-         total (count coll)]
-     (-> (/ (apply + squares)
-            ;FIXME divide by 0 error(- total 1))
-            (+ total 1))
-         (Math/sqrt)))))
+   (let [squares (map #(x-avg-squared % avg) coll)
+         cnt (count coll)]
+     (if (= 1 cnt)
+       0
+       (Math/sqrt (/ (apply + squares) (- cnt 1)))))))
 
 
 ; IMPORT AND PREPARE DATA
-(defn split-row
+(defn convert-value
+  "converts a string into the right value of the trip data"
+  [trip_key value]
+  ((get (into {} trip_types) trip_key) value))
+
+(defn- split-row
   "splits a csv row on the comma"
   [row]
   (clojure.string/split row #","))
+
+(defn- convert-row
+  "Takes in a raw imported row of trip data and returns the row with the values
+  coerced into the proper data type"
+  [row]
+  (reduce (fn [row-map [trip-key value]]
+            (assoc row-map trip-key (convert-value trip-key value)))
+          {}
+          (into [] row)))
 
 (defn import-file
   "imports a file and converts each row into a map with properly typed values.
