@@ -122,8 +122,9 @@
 ; VERIFY ROWS
 ; NOTE: the approach for verifying is to take the raw row and pass over a series
 ; of filters that will detect anomalous values. If a row is found to have values
-; within our tolerances, then a {:valid true} map is appended to the row.
-; {:verified true} is added to the row after all validations step complete
+; outside our tolerances, then a {:valid false} map is assoc'd on the row.
+; {:verified true} is added to the row after all validations step complete when
+; no :valid false is present.
 
 ; This is VERY innefficient right now. I'm just learning clojure and focusing on
 ; getting my head around using the data structures and functions properly
@@ -136,7 +137,7 @@
   confirm the values in this data are normal. Be sure to update the README if
   validity criteria change"
   [value mean stddev]
-  (> value (* 3 (+ mean stddev))))
+  (> value (+ mean (* 3 stddev))))
 
 (def not-extreme-numeric? (complement extreme-numeric?))
 
@@ -148,7 +149,7 @@
 ; TODO: refactor this. I'm incredibly distracted (penny is singing at the top
 ; of her lungs in the tub) and trying to just get this function correct
 
-(defn add-valid-for-numeric!
+(defn add-valid-for-numeric
   "adds {:valid false} for a numeric key iff validity check fails"
   [row mapkey verified-fx?]
   (if (verified-fx? (mapkey row))
@@ -161,22 +162,23 @@
         stddev (calc-stddev (map column imported-rows) mean)
         passesaudit? #(not-extreme-numeric? % mean stddev)
         ]
-    (map (fn [row] (add-valid-for-numeric! row column passesaudit?)) imported-rows)))
+    (map (fn [row] (add-valid-for-numeric row column passesaudit?)) imported-rows)))
 
+; TODO: be able to pull out numeric rows from trip_types above
+(def numeric-data-columns [:pickup_longitude
+                           :pickup_latitude
+                           :dropoff_longitude
+                           :dropoff_latitude
+                           :tip_amount
+                           :trip_distance
+                           :fare_amount
+                           :tip_amount
+                           :tolls_amount
+                           :total_amount])
 (defn audit-numerics
   "Takes in a lazy sequence of rows and verifies values are not extreme"
   ([raw-rows]
-   ; TODO: be able to pull out numeric rows from trip_types above
-   (audit-numerics raw-rows [:pickup_longitude
-                             :pickup_latitude
-                             :dropoff_longitude
-                             :dropoff_latitude
-                             :tip_amount
-                             :trip_distance
-                             :fare_amount
-                             :tip_amount
-                             :tolls_amount
-                             :total_amount]))
+   (audit-numerics raw-rows numeric-data-columns))
   ([raw-rows mapkeys]
      (if (first mapkeys)
        (do

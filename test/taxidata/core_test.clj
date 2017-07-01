@@ -1,6 +1,9 @@
 (ns taxidata.core-test
   (:require [clojure.test :refer :all]
-            [taxidata.core :refer :all]))
+            [taxidata.core :refer :all]
+            [bond.james :as bond :refer [with-spy]]))
+
+(def filename99 "data/trip_2016_06-100.csv")
 
 (deftest to_int-test
   (testing "takes in a value and coerces it to an int when possible or throws
@@ -66,3 +69,39 @@
     (is (= 1.8708286933869707 (calc-stddev [1 2 3 4 5 6]))))
   (testing "does not divide by zero"
     (is (= 0 (calc-stddev [1])))))
+
+(deftest extreme-numeric?-test
+  (testing "when a value is > 3 standard deviations from the mean, it's extreme"
+    (is (= false (extreme-numeric? 3 3 1)))
+    (is (= true (extreme-numeric? 6.1 3 1))))
+  (testing "complement function exists"
+    (is (= true (not-extreme-numeric? 3 3 1)))))
+
+; add-valid-for-numeric-test
+(with-test
+  (def valid-value "bar")
+  (def invalid-value "baz")
+  (def valid-fx #(= valid-value %))
+
+  (testing "adds {:valid false} when the validity check fails"
+    (is (contains? (add-valid-for-numeric {:foo invalid-value} :foo valid-fx) :valid))
+    (is (not (contains? (add-valid-for-numeric {:foo valid-value} :foo valid-fx) :valid)))))
+
+; NOTE: 99 records is helpful here to avoid influencing the mean and stddev
+(def validrecords99 (import-file filename99))
+(def invalidrecords99 (cons (assoc (first validrecords99) :tip_amount 70) validrecords99 ))
+
+(deftest audit-numeric-column!-test
+  (testing "audit-numberic-column!"
+    (testing "tests a column for extreme continuous values"
+      (is (contains? (first (audit-numeric-column! invalidrecords99 :tip_amount)) :valid)))))
+
+(deftest audit-numerics-test
+  (testing "a higher order, more specific, fx to check all known continuous
+           numeric functions for extreme values"
+    (with-spy [audit-numeric-column!]
+      (audit-numerics validrecords99)
+      (let [calls (bond/calls audit-numeric-column!)]
+        (println "calling on columns")
+        (is (= numeric-data-columns (map last (map :args calls))))
+        (is (= (count numeric-data-columns) (count calls)))))))
