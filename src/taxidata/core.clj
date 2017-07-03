@@ -187,6 +187,7 @@
        raw-rows)))
 
 ; 2. enums
+; Columns with known discrete values
 
 (def valid-vendor-values #{1 2})
 (def valid-improvement-surcharge  #{0.0 0.3})
@@ -196,31 +197,34 @@
 (def valid-rate-code-ids (into #{} (range 1 7))) ; NOTE: 1-6
 (def valid-payment-types (into #{} (range 1 7))) ; NOTE: 1-6
 
+(def valid-enum-columns [[valid-vendor-values :vendor_id]
+                         [valid-improvement-surcharge :improvement_surcharge]
+                         [valid-mta-tax :mta_tax]
+                         [valid-extra :extra]
+                         [valid-store-and-forward-flags :store_and_fwd_flag]
+                         [valid-rate-code-ids :ratecode_id]
+                         [valid-payment-types :payment_type]])
+
+(defn audit-enum-column
+  "checks and validates that a column has a valid discrete value"
+  [rows column valid-set]
+  (map
+    (fn
+      [row]
+        (let [col-val (get row column)]
+          (if (and col-val (contains? valid-set col-val))
+            row
+            (assoc row :valid false))))
+    rows))
+
 (defn audit-enum
   "Validates rows whose columns should be specified, discrete, values"
   ([rows]
-   (audit-enum rows [
-                     [valid-vendor-values :vendor_id]
-                     [valid-improvement-surcharge :improvement_surcharge]
-                     [valid-mta-tax :mta_tax]
-                     [valid-extra :extra]
-                     [valid-store-and-forward-flags :store_and_fwd_flag]
-                     [valid-rate-code-ids :ratecode_id]
-                     [valid-payment-types :payment_type]
-                     ]))
+   (audit-enum rows valid-enum-columns))
   ([rows validations]
-   (let [ [valid-enum-fx mapkey] (first validations)]
-     (if valid-enum-fx
-       (do
-         ; TODO: convert this to a log entry
-         (println mapkey)
-         (recur (map
-                  (fn
-                    [row]
-                    (if (contains? valid-enum-fx (mapkey row))
-                      row
-                      (assoc row :valid false)))
-                  rows) (rest validations)))
+   (let [[valid-enum-fx mapkey] (first validations)]
+     (if (first validations)
+       (recur (audit-enum-column rows mapkey valid-enum-fx) (rest validations))
        rows))))
 
 ; 3. total row validation

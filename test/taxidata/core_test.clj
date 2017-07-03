@@ -89,9 +89,10 @@
 
 ; NOTE: 99 records is helpful here to avoid influencing the mean and stddev
 (def validrecords99 (import-file filename99))
-(def invalidrecords99 (cons (assoc (first validrecords99) :tip_amount 70) validrecords99 ))
 
-(deftest audit-numeric-column!-test
+(with-test
+  (def invalidrecords99 (cons (assoc (first validrecords99) :tip_amount 70) validrecords99 ))
+
   (testing "audit-numberic-column!"
     (testing "tests a column for extreme continuous values"
       (is (contains? (first (audit-numeric-column! invalidrecords99 :tip_amount)) :valid)))))
@@ -102,6 +103,41 @@
     (with-spy [audit-numeric-column!]
       (audit-numerics validrecords99)
       (let [calls (bond/calls audit-numeric-column!)]
-        (println "calling on columns")
         (is (= numeric-data-columns (map last (map :args calls))))
         (is (= (count numeric-data-columns) (count calls)))))))
+
+(with-test
+  (def validation-column :vendor_id)
+  (def invalidrecords99 (cons (assoc (first validrecords99) validation-column 3) validrecords99 ))
+  (def valid-set #{1 2})
+
+  (testing "audit-enum-column"
+    (testing "adds {:valid false} when the map key is not present"
+      (let [invalid-rows (filter
+                           (fn [row] (contains? row :valid))
+                           (audit-enum-column validrecords99 :foo valid-set))]
+      (is (= (count validrecords99) (count invalid-rows)))))
+
+    (testing "adds {:valid false} when the value of the column is not in the verification set"
+      (let [invalid-rows (filter
+                           (fn [row] (contains? row :valid))
+                           (audit-enum-column invalidrecords99 validation-column valid-set))]
+      (is (= 1 (count invalid-rows)))))
+
+    (testing "does not add any :valid keys to the map if the rows are valid"
+      (let [invalid-rows (filter
+                           (fn [row] (contains? row :valid))
+                           (audit-enum-column validrecords99 validation-column valid-set))]
+      (is (= 0 (count invalid-rows)))))))
+
+(deftest audit-enum-test
+  (testing "a higher order, more specific, fx to check all known discrete columns"
+
+    (with-spy [audit-enum-column]
+      (audit-enum validrecords99)
+
+      (let [calls (bond/calls audit-enum-column)]
+        (testing "all enum columns are passed in to audit-enum"
+          (is (= (map last valid-enum-columns) (map second (map :args calls)))))
+        (testing "valid-enum-columns is called for each column specified"
+          (is (= (count valid-enum-columns) (count calls))))))))
