@@ -9,6 +9,7 @@
 ;NOTE: it munges the trip_type keys into any order
 
 (def filename100 "data/trip_2016_06-100.csv")
+(def filename1000000 "data/trip_2016_06-1000000.csv")
 (def filenameAll "data/yellow_tripdata_2016-06.csv")
 
 ;(def mapified-trips (with-open [r (clojure.java.io/input-stream filename)]
@@ -144,8 +145,8 @@
 ; FIXME: I don't quite have this right. I want to be able to run validity
 ; functions indempotently and NOT overwrite a :valid false with a :valid true
 ; and cause problems later when an invalid row is overwritten with false
-
 ; needs to contain key && mapkey && have key be false to skip, else process
+
 ; TODO: refactor this. I'm incredibly distracted (penny is singing at the top
 ; of her lungs in the tub) and trying to just get this function correct
 
@@ -247,9 +248,21 @@
   [rows]
   (map audit-row-relationship rows))
 
-; TODO make a function that takes in a file and runs all the validations
+; 4. Compose all auditing functions together
+(defn validate-rows
+  "pass in a seq of rows and return all rows after having passed through all
+  auditing functions. Returned rows will have valid: true if validated and
+  :valid false if any audit function failed"
+  [rows]
+  (let [audited-rows ((comp audit-rows-relationship audit-enum audit-numerics) rows)]
+  (map (fn [row]
+         (if (contains? row :valid)
+           row
+           (assoc row :valid true)))
+         audited-rows)))
 
 ; SCRATCHPAD
+
 ; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
 ; (def first10 (take 10 (import-file filename100)))
@@ -257,4 +270,6 @@
 
 ; (def allrecords (import-file filenameAll))
 ; (def records100 (import-file filename100))
+; (def records1M (import-file filename1000000))
+; (map println (filter #(= false (:valid %)) (validate-rows validrecords99)))
 ; (time (map :valid (audit-numerics allrecords)))

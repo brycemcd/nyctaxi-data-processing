@@ -190,3 +190,9 @@
       (testing "all rows are passed to audit functions"
         (let [calls (bond/calls audit-row-relationship)]
           (is (= (count validrecords99) (count calls))))))))
+
+(deftest validatate-rows-test
+    (testing "after calling all audit functions, :valid is assoc'd to the row"
+      ; NOTE: this just checks the count of not nil :valid keys. Not a great
+      ; test. Still learning Clojure
+      (is (= 99 (count (filter #(not (= nil %)) (map :valid (validate-rows validrecords99))))))))
