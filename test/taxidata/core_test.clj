@@ -4,6 +4,8 @@
             [bond.james :as bond :refer [with-spy]]))
 
 (def filename99 "data/trip_2016_06-100.csv")
+; NOTE: 99 records is helpful here to avoid influencing the mean and stddev
+(def validrecords99 (import-file filename99))
 
 (deftest to_int-test
   (testing "takes in a value and coerces it to an int when possible or throws
@@ -87,9 +89,6 @@
     (is (contains? (add-valid-for-numeric {:foo invalid-value} :foo valid-fx) :valid))
     (is (not (contains? (add-valid-for-numeric {:foo valid-value} :foo valid-fx) :valid)))))
 
-; NOTE: 99 records is helpful here to avoid influencing the mean and stddev
-(def validrecords99 (import-file filename99))
-
 (with-test
   (def invalidrecords99 (cons (assoc (first validrecords99) :tip_amount 70) validrecords99 ))
 
@@ -133,11 +132,61 @@
 (deftest audit-enum-test
   (testing "a higher order, more specific, fx to check all known discrete columns"
 
-    (with-spy [audit-enum-column]
-      (audit-enum validrecords99)
+    (testing "unary version calls is legal and calls binary version of itself"
+      (with-spy [audit-enum-column]
+        (audit-enum validrecords99)
 
-      (let [calls (bond/calls audit-enum-column)]
-        (testing "all enum columns are passed in to audit-enum"
-          (is (= (map last valid-enum-columns) (map second (map :args calls)))))
-        (testing "valid-enum-columns is called for each column specified"
-          (is (= (count valid-enum-columns) (count calls))))))))
+        (let [calls (bond/calls audit-enum-column)]
+          (testing "all enum columns are passed in to audit-enum"
+            (is (= (map last valid-enum-columns) (map second (map :args calls)))))
+          (testing "valid-enum-columns is called for each column specified"
+            (is (= (count valid-enum-columns) (count calls)))))))
+
+    (testing "binary version can be called directly"
+      (with-spy [audit-enum-column]
+        (audit-enum validrecords99 [[valid-vendor-values :vendor_id]])
+
+        (let [calls (bond/calls audit-enum-column)]
+          (testing "all enum columns are passed in to audit-enum"
+            (is (= [:vendor_id] (map second (map :args calls)))))
+          (testing "valid-enum-columns is called for each column specified"
+            (is (= 1 (count calls)))))))))
+
+(deftest dropoff-after-pickup?-test
+  (with-test
+    (def validdropoff {:tpep_pickup_datetime  (to_dttm "2017-07-02 18:00:00")
+                       :tpep_dropoff_datetime (to_dttm "2017-07-02 19:00:00")})
+
+    (testing "dropoff-after-pickup? validation to ensure dropoff time is later than pickup time"
+      (is (= true (dropoff-after-pickup? validdropoff)))))
+
+  (with-test
+    (def invaliddropoff {:tpep_pickup_datetime  (to_dttm "2017-07-02 18:00:00")
+                         :tpep_dropoff_datetime (to_dttm "2017-07-02 17:00:00")})
+
+    (testing "dropoff-after-pickup? validation to ensure dropoff time is later than pickup time"
+      (is (= false (dropoff-after-pickup? invaliddropoff))))))
+
+; FIXME: for reasons I can't comprehend, audit-row-relationship-test NEVER returns failed tests (false positive!)
+(deftest audit-row-test
+  (with-test
+    (def dropoff-before-pickup {:tpep_pickup_datetime  (to_dttm "2017-07-02 18:00:00")
+                                :tpep_dropoff_datetime (to_dttm "2017-07-02 14:00:00")})
+
+    (def dropoff-after-pickup  {:tpep_pickup_datetime  (to_dttm "2017-07-02 18:00:00")
+                                :tpep_dropoff_datetime (to_dttm "2017-07-02 20:00:00")})
+    (testing "row is invalidated if validation functions return false"
+      (is (= true (contains? (audit-row-relationship dropoff-before-pickup) :valid))))
+
+    (testing "row is validated if validation functions return true"
+      (is (= false (contains? (audit-row-relationship dropoff-after-pickup) :valid))))))
+
+(deftest audit-rows-relationship-test
+  (testing "when called with a seq of rows, each row is audited"
+    (with-spy [audit-row-relationship]
+      ; count is called here to realize the map function
+      (count (audit-rows-relationship validrecords99))
+
+      (testing "all rows are passed to audit functions"
+        (let [calls (bond/calls audit-row-relationship)]
+          (is (= (count validrecords99) (count calls))))))))

@@ -30,7 +30,7 @@
   (dttm_f/parse (dttm_f/formatters :mysql) value)) ; NOTE: mysql formatter is YYYYMMDD HH:mm::ss
 
 ; the functions that casts these values as the proper type
-(def trip_types [[:vendor_id to_int]
+(def trip-types [[:vendor_id to_int]
                 [:tpep_pickup_datetime to_dttm]
                 [:tpep_dropoff_datetime to_dttm]
                 [:passenger_count to_int]
@@ -50,7 +50,7 @@
                 [:improvement_surcharge to_dec]
                 [:total_amount to_dec]])
 
-(def trip_header (map first trip_types))
+(def trip-header (map first trip-types))
 
 
 
@@ -90,7 +90,7 @@
 (defn convert-value
   "converts a string into the right value of the trip data"
   [trip_key value]
-  ((get (into {} trip_types) trip_key) value))
+  ((get (into {} trip-types) trip_key) value))
 
 (defn- split-row
   "splits a csv row on the comma"
@@ -113,7 +113,7 @@
   (letfn [(helper [rdr]
             (lazy-seq
               (if-let [line (.readLine rdr)]
-                (cons (convert-row (zipmap trip_header (split-row line))) (helper rdr))
+                (cons (convert-row (zipmap trip-header (split-row line))) (helper rdr))
                 (do
                   (.close rdr)
                   nil))))]
@@ -164,7 +164,7 @@
         ]
     (map (fn [row] (add-valid-for-numeric row column passesaudit?)) imported-rows)))
 
-; TODO: be able to pull out numeric rows from trip_types above
+; TODO: be able to pull out numeric rows from trip-types above
 (def numeric-data-columns [:pickup_longitude
                            :pickup_latitude
                            :dropoff_longitude
@@ -242,7 +242,7 @@
     row
     (assoc row :valid false)))
 
-(defn audit-row-relationship
+(defn audit-rows-relationship
   "validates that relationships of values in the rows makes sense"
   [rows]
   (map audit-row-relationship rows))
