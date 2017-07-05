@@ -130,6 +130,14 @@
 ; This is VERY innefficient right now. I'm just learning clojure and focusing on
 ; getting my head around using the data structures and functions properly
 
+; 0. Invalidation
+(defn invalidate
+  "Given a map, append :valid false and the reason for the invalidation to
+  the map."
+  [row invalid-reason]
+  (let [reasons (or (:invalid-reason row) '())]
+    (assoc row :valid false :invalid-reason (cons invalid-reason reasons))))
+
 ; 1. Numerics
 (defn extreme-numeric?
   "determines if value is reasonable to include in analysis. For now extreme
@@ -155,7 +163,7 @@
   [row mapkey verified-fx?]
   (if (verified-fx? (mapkey row))
     row
-    (assoc row :valid false)))
+    (invalidate row (str mapkey " fails numeric audit"))))
 
 (defn audit-numeric-column!
   [imported-rows column]
@@ -215,7 +223,7 @@
         (let [col-val (get row column)]
           (if (and col-val (contains? valid-set col-val))
             row
-            (assoc row :valid false))))
+            (invalidate row (str column " not in enum " valid-set)))))
     rows))
 
 (defn audit-enum
@@ -241,7 +249,7 @@
   [row]
   (if (dropoff-after-pickup? row)
     row
-    (assoc row :valid false)))
+    (invalidate row "total row validation failed")))
 
 (defn audit-rows-relationship
   "validates that relationships of values in the rows makes sense"
