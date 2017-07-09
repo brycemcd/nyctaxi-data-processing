@@ -163,7 +163,7 @@
   [row mapkey verified-fx?]
   (if (verified-fx? (mapkey row))
     row
-    (invalidate row (str mapkey " fails numeric audit"))))
+    (invalidate row mapkey)))
 
 (defn audit-numeric-column!
   [imported-rows column]
@@ -181,7 +181,6 @@
                            :tip_amount
                            :trip_distance
                            :fare_amount
-                           :tip_amount
                            :tolls_amount
                            :total_amount])
 (defn audit-numerics
@@ -201,7 +200,10 @@
 (def valid-vendor-values #{1 2})
 (def valid-improvement-surcharge  #{0.0 0.3})
 (def valid-mta-tax #{0.5})
-(def valid-extra #{0.5 1.0})
+; NOTE: the data dictionary indicates 0.5 and 1.0 are valid values and kind of
+; suggests that 0.0 might be valid as well. ~ 1/2 the data include 0.0 so I'll
+; assume it's valid for now
+(def valid-extra #{0.0 0.5 1.0})
 (def valid-store-and-forward-flags  #{"N" "Y"})
 (def valid-rate-code-ids (into #{} (range 1 7))) ; NOTE: 1-6
 (def valid-payment-types (into #{} (range 1 7))) ; NOTE: 1-6
@@ -223,7 +225,7 @@
         (let [col-val (get row column)]
           (if (and col-val (contains? valid-set col-val))
             row
-            (invalidate row (str column " not in enum " valid-set)))))
+            (invalidate row column))))
     rows))
 
 (defn audit-enum
@@ -249,7 +251,7 @@
   [row]
   (if (dropoff-after-pickup? row)
     row
-    (invalidate row "total row validation failed")))
+    (invalidate row :whole-row-validation)))
 
 (defn audit-rows-relationship
   "validates that relationships of values in the rows makes sense"
@@ -280,4 +282,69 @@
 ; (def records100 (import-file filename100))
 ; (def records1M (import-file filename1000000))
 ; (map println (filter #(= false (:valid %)) (validate-rows validrecords99)))
-; (time (map :valid (audit-numerics allrecords)))
+; (frequencies (flatten (map :invalid-reason (filter #(= false (:valid %)) (validate-rows records1M)))))
+; NOTE: 2017-07-05
+; Running the above frequencies function yeilds this:
+; {
+; :tip_amount 42658,
+; :tolls_amount 3212
+; :extra 449637
+; :improvement_surcharge 459
+; :pickup_longitude 12566
+; :ratecode_id 16
+; :trip_distance 29314
+; :dropoff_longitude 11659
+; :fare_amount 13
+; :mta_tax 4987
+; :total_amount 20
+; :whole-row-validation 1109}
+; the "extra" column is an enum with recorded valid values of 0.5 and 1.0
+; (map println (sort-by last (frequencies (map :extra records1M))))
+; [2.0 1]
+; [0.3 1]
+; [70.0 1]
+; [2.5 1]
+; [10.0 1]
+; [20.0 1]
+; [1.5 1]
+; [50.0 1]
+; [30.3 1]
+; [0.8 1]
+; [34.59 1]
+; [0.03 1]
+; [1.23 1]
+; [4.54 1]
+; [0.02 2]
+; [5.5 3]
+; [0.1 4]
+; [-4.5 7]
+; [-1.0 55]
+; [-0.5 181]
+; [4.5 4252]
+; [1.0 157483]
+; [0.5 392880]
+; [0.0 445119]
+; I think 0.0 is a valid value and I have no idea what the other values could be
+; from the numeric validation
+; (frequencies (flatten (map :invalid-reason (filter #(= false (:valid %)) (validate-rows records1M)))))
+;
+; Much better. The next highest invalid column is tip_amount
+; tip_amount is a continuous column. The mean of the invalid rows is 12.985 with
+; stddev of 7.27 That doesn't seem that high to me. It's reasonable that someone
+; was coming to/from the airport. $90 fare * 20% tip would be an $18 tip
+; the mean tip amount of valid values is 1.6578 with a stddev of 1.8384
+; just out of sheer curiosity, the mean trip distance for valid tip_amounts is
+; 2.7700 and the mean trip distance of invalid tip_amounts is 15.103. I think
+; this is a false positive. There are probably enough long trips to justify the
+; large tip amount. I'll move the valid numeric out to 4 stddev to see what that
+; does
+;
+; Still makes sense. Mean fare_amount = 58.3366 with a mean tip amount of 17.36
+; for the invalid tips. That's a 30% tip and well within reason
+;
+; Even at 5 stddev as the definistion of extreme numeric, the mean trip_distance
+; is 16.0377, 22.344 mean tip and 67.744 mean fare_amount. This is pretty reasonable
+; I think it would be fairly inconsequential to exclude these trips for now
+; and come up with a fare / distance / tip algo to detect extreme values. It's
+; likely a multi-modal distribution and auditing the data should appreciate that
+; phenomenon

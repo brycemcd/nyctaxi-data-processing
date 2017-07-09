@@ -75,23 +75,23 @@
 (deftest invalidate-test
   (with-test
     (def example-row {:foo "bar"})
-    (def invalid-reason "not valid")
-    (def invalid-reason2 "value too large")
+    (def invalid-col :key1)
+    (def invalid-col2 :key2)
 
     (testing "assoc :valid false to the map"
-      (is (= false (:valid (invalidate example-row invalid-reason)))))
+      (is (= false (:valid (invalidate example-row invalid-col)))))
 
     (testing "when no invalid reasons exist, A new key and list are created"
-      (let [return-map (invalidate example-row invalid-reason)
+      (let [return-map (invalidate example-row invalid-col)
             invalid-reasons (:invalid-reason return-map)]
-        (is (= invalid-reason (first invalid-reasons)))
+        (is (= invalid-col (first invalid-reasons)))
         (is (= 1 (count invalid-reasons)))))
 
     (testing "when invalid reasons already exist, A new key and vector are created"
-      (let [return-map (invalidate (assoc example-row :valid false :invalid-reason (cons invalid-reason2 '())) invalid-reason)
+      (let [return-map (invalidate (assoc example-row :valid false :invalid-reason (cons invalid-col2 '())) invalid-col)
             invalid-reasons (:invalid-reason return-map)]
-        (is (= invalid-reason (first invalid-reasons)))
-        (is (= invalid-reason2 (second invalid-reasons)))
+        (is (= invalid-col (first invalid-reasons)))
+        (is (= invalid-col2 (second invalid-reasons)))
         (is (= 2 (count invalid-reasons)))))))
 
 (deftest extreme-numeric?-test
