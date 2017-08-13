@@ -2,22 +2,11 @@
   (:require [clj-time.core :as dttm]
             [clj-time.format :as dttm_f]
             [kixi.stats.core :as stats]
+            [taxidata.util-calc :as calc]
             ))
 
 (declare mapify)
 
-;NOTE: it munges the trip_type keys into any order
-
-(def filename100 "data/trip_2016_06-100.csv")
-(def filename1000000 "data/trip_2016_06-1000000.csv")
-(def filenameAll "data/yellow_tripdata_2016-06.csv")
-
-;(def mapified-trips (with-open [r (clojure.java.io/input-stream filename)]
-                    ;(loop [c (.read r)]
-                      ;(if (not= c -1)
-                        ;(do
-                          ;(print (char c))
-                          ;(recur (.read r)))))))
 (defn to_int
   [value]
   (Integer. value))
@@ -52,73 +41,6 @@
                 [:total_amount to_dec]])
 
 (def trip-header (map first trip-types))
-
-
-
-; BASIC MATHS
-; The calc-functions here are designed to provide easily accessible calculations
-; useful for verifying and auditing rows later
-
-; TODO: take into account missing fields
-
-; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/01_primitive-data/1-20_simple-statistics.asciidoc
-(defn calc-mean
-  "calculate a simple mean of a collection"
-  [coll]
-  (let [sum (apply + coll)
-        cnt (count coll)]
-    (if (pos? cnt)
-      (/ sum cnt)
-      0.0)))
-
-(defn- x-avg-squared
-  [x avg]
-  (* (- x avg) (- x avg)))
-
-(defn calc-stddev
-  "calculate the stddev of a collection"
-  ([coll]
-   (calc-stddev coll (calc-mean coll)))
-  ([coll avg]
-   (let [squares (map #(x-avg-squared % avg) coll)
-         cnt (count coll)]
-     (if (= 1 cnt)
-       0
-       (Math/sqrt (/ (apply + squares) (- cnt 1)))))))
-
-
-; IMPORT AND PREPARE DATA
-(defn convert-value
-  "converts a string into the right value of the trip data"
-  [trip_key value]
-  ((get (into {} trip-types) trip_key) value))
-
-(defn- split-row
-  "splits a csv row on the comma"
-  [row]
-  (clojure.string/split row #","))
-
-(defn- convert-row
-  "Takes in a raw imported row of trip data and returns the row with the values
-  coerced into the proper data type"
-  [row]
-  (reduce (fn [row-map [trip-key value]]
-            (assoc row-map trip-key (convert-value trip-key value)))
-          {}
-          (into [] row)))
-
-(defn import-file
-  "imports a file and converts each row into a map with properly typed values.
-  Returns a lazy sequence of file rows"
-  [file]
-  (letfn [(helper [rdr]
-            (lazy-seq
-              (if-let [line (.readLine rdr)]
-                (cons (convert-row (zipmap trip-header (split-row line))) (helper rdr))
-                (do
-                  (.close rdr)
-                  nil))))]
-    (helper (clojure.java.io/reader file))))
 
 ; VERIFY ROWS
 ; NOTE: the approach for verifying is to take the raw row and pass over a series
@@ -167,8 +89,8 @@
 
 (defn audit-numeric-column!
   [imported-rows column]
-  (let [mean   (calc-mean (map column imported-rows))
-        stddev (calc-stddev (map column imported-rows) mean)
+  (let [mean   (calc/mean (map column imported-rows))
+        stddev (calc/stddev (map column imported-rows) mean)
         passesaudit? #(not-extreme-numeric? % mean stddev)
         ]
     (map (fn [row] (add-valid-for-numeric row column passesaudit?)) imported-rows)))
@@ -270,81 +192,3 @@
            row
            (assoc row :valid true)))
          audited-rows)))
-
-; SCRATCHPAD
-
-; call with (reduce + (map to_int (map first (mapify-row (lazy-file-lines filename)))))
-; (calc-stddev (map to_int (map first (mapify-row (lazy-file-lines filename)))))
-; (def first10 (take 10 (import-file filename100)))
-; (audit-rows first10)
-
-; (def allrecords (import-file filenameAll))
-; (def records100 (import-file filename100))
-; (def records1M (import-file filename1000000))
-; (map println (filter #(= false (:valid %)) (validate-rows validrecords99)))
-; (frequencies (flatten (map :invalid-reason (filter #(= false (:valid %)) (validate-rows records1M)))))
-; NOTE: 2017-07-05
-; Running the above frequencies function yeilds this:
-; {
-; :tip_amount 42658,
-; :tolls_amount 3212
-; :extra 449637
-; :improvement_surcharge 459
-; :pickup_longitude 12566
-; :ratecode_id 16
-; :trip_distance 29314
-; :dropoff_longitude 11659
-; :fare_amount 13
-; :mta_tax 4987
-; :total_amount 20
-; :whole-row-validation 1109}
-; the "extra" column is an enum with recorded valid values of 0.5 and 1.0
-; (map println (sort-by last (frequencies (map :extra records1M))))
-; [2.0 1]
-; [0.3 1]
-; [70.0 1]
-; [2.5 1]
-; [10.0 1]
-; [20.0 1]
-; [1.5 1]
-; [50.0 1]
-; [30.3 1]
-; [0.8 1]
-; [34.59 1]
-; [0.03 1]
-; [1.23 1]
-; [4.54 1]
-; [0.02 2]
-; [5.5 3]
-; [0.1 4]
-; [-4.5 7]
-; [-1.0 55]
-; [-0.5 181]
-; [4.5 4252]
-; [1.0 157483]
-; [0.5 392880]
-; [0.0 445119]
-; I think 0.0 is a valid value and I have no idea what the other values could be
-; from the numeric validation
-; (frequencies (flatten (map :invalid-reason (filter #(= false (:valid %)) (validate-rows records1M)))))
-;
-; Much better. The next highest invalid column is tip_amount
-; tip_amount is a continuous column. The mean of the invalid rows is 12.985 with
-; stddev of 7.27 That doesn't seem that high to me. It's reasonable that someone
-; was coming to/from the airport. $90 fare * 20% tip would be an $18 tip
-; the mean tip amount of valid values is 1.6578 with a stddev of 1.8384
-; just out of sheer curiosity, the mean trip distance for valid tip_amounts is
-; 2.7700 and the mean trip distance of invalid tip_amounts is 15.103. I think
-; this is a false positive. There are probably enough long trips to justify the
-; large tip amount. I'll move the valid numeric out to 4 stddev to see what that
-; does
-;
-; Still makes sense. Mean fare_amount = 58.3366 with a mean tip amount of 17.36
-; for the invalid tips. That's a 30% tip and well within reason
-;
-; Even at 5 stddev as the definistion of extreme numeric, the mean trip_distance
-; is 16.0377, 22.344 mean tip and 67.744 mean fare_amount. This is pretty reasonable
-; I think it would be fairly inconsequential to exclude these trips for now
-; and come up with a fare / distance / tip algo to detect extreme values. It's
-; likely a multi-modal distribution and auditing the data should appreciate that
-; phenomenon
