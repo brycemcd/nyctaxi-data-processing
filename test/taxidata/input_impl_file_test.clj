@@ -12,7 +12,7 @@
     (is (= 9 (count rows))))
 
   (testing "after file is imported, data in file is converted as a map"
-    (is (instance? clojure.lang.PersistentHashMap first-row))
+    (is (instance? taxidata.input_impl_file.TaxiTrip first-row))
 
     ; NOTE: these are extremely brittle tests, but I'm not sure of another way
     ; of writing these without making them really difficult to read/reason about

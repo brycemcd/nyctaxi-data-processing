@@ -20,12 +20,6 @@
     (is (= 0.0 (to_dec "0.0")))
     (is (thrown? java.lang.NumberFormatException (to_dec "snorkle")))))
 
-(deftest convert-value-test
-  (testing "given a trip key and a value, converts the value into the right thing
-           from a string"
-    (is (= 1 (convert-value :vendor_id "1")))
-    (is (= 0.0 (convert-value :extra "0.0")))))
-
 (deftest invalidate-test
   (with-test
     (def example-row {:foo "bar"})
