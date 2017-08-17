@@ -75,13 +75,19 @@
 
 (defn- create-trip
   "creates a TaxiTrip from a raw line of data in the file"
-  [line & extra]
+  [line]
   ; convert the raw row into a map, then TaxiTrip with the wrong types cast
   (let [primTT (zipmap trip-header (split-row line))]
     (map->TaxiTrip (cast-row primTT))))
 
-(defn import-file
-  [file]
+; NOTE: feels like I want a transducer here
+(defn create-trips-from-file
+  "Buffers a file, creates TaxiTrips from each row in the file (default line
+  separator as used in clojure.java.io/reader), calls a function on the row and
+  then a callback on the result of the rowfx
+
+  callbackfx = a function to call after the tripfx has been called on the TaxiTrip"
+  [file callbackfx]
   (with-open [rdr (clojure.java.io/reader file)]
     (doseq [line (line-seq rdr)]
-      (println (:valid (validate-enum-cols (create-trip line)))))))
+      (callbackfx (create-trip line)))))

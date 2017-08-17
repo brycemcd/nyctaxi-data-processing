@@ -6,19 +6,16 @@
             [bond.james :as bond :refer [with-spy]]))
 
 ;; NOTE: 99 records is helpful here to avoid influencing the mean and stddev
-(def validrecords99 (import-file filename99))
+  (def all-returns (atom ()))
+  (defn callbk
+    [trip]
+    (swap! all-returns conj trip))
 
-(deftest to_int-test
-  (testing "takes in a value and coerces it to an int when possible or throws
-           an error if not possible"
-    (is (= 0 (to_int "0")))
-    (is (thrown? java.lang.NumberFormatException (to_int "snorkle")))))
+(def validrecords99 (reverse (reduce conj
+                                     ()
+                                     (create-trips-from-file filename99 callbk))))
 
-(deftest to_dec-test
-  (testing "takes in a value and coerces it to a fixed width decimal or throws
-           an error if not possible"
-    (is (= 0.0 (to_dec "0.0")))
-    (is (thrown? java.lang.NumberFormatException (to_dec "snorkle")))))
+  (def first-row (last @all-returns))
 
 (deftest invalidate-test
   (with-test
@@ -42,85 +39,31 @@
         (is (= invalid-col2 (second invalid-reasons)))
         (is (= 2 (count invalid-reasons)))))))
 
-(deftest extreme-numeric?-test
-  (testing "when a value is > 3 standard deviations from the mean, it's extreme"
-    (is (= false (extreme-numeric? 3 3 1)))
-    (is (= true (extreme-numeric? 6.1 3 1))))
-  (testing "complement function exists"
-    (is (= true (not-extreme-numeric? 3 3 1)))))
-
-; add-valid-for-numeric-test
-(with-test
-  (def valid-value "bar")
-  (def invalid-value "baz")
-  (def valid-fx #(= valid-value %))
-
-  (testing "adds {:valid false} when the validity check fails"
-    (is (contains? (add-valid-for-numeric {:foo invalid-value} :foo valid-fx) :valid))
-    (is (not (contains? (add-valid-for-numeric {:foo valid-value} :foo valid-fx) :valid)))))
-
-(with-test
-  (def invalidrecords99 (cons (assoc (first validrecords99) :tip_amount 70) validrecords99 ))
-
-  (testing "audit-numberic-column!"
-    (testing "tests a column for extreme continuous values"
-      (is (contains? (first (audit-numeric-column! invalidrecords99 :tip_amount)) :valid)))))
-
-(deftest audit-numerics-test
-  (testing "a higher order, more specific, fx to check all known continuous
-           numeric functions for extreme values"
-    (with-spy [audit-numeric-column!]
-      (audit-numerics validrecords99)
-      (let [calls (bond/calls audit-numeric-column!)]
-        (is (= numeric-data-columns (map last (map :args calls))))
-        (is (= (count numeric-data-columns) (count calls)))))))
-
 (with-test
   (def validation-column :vendor_id)
-  (def invalidrecords99 (cons (assoc (first validrecords99) validation-column 3) validrecords99 ))
   (def valid-set #{1 2})
+  (def enum-validations-test
+    {:vendor_id #{1 2}})
 
-  (testing "audit-enum-column"
-    (testing "adds {:valid false} when the map key is not present"
-      (let [invalid-rows (filter
-                           (fn [row] (contains? row :valid))
-                           (audit-enum-column validrecords99 :foo valid-set))]
-      (is (= (count validrecords99) (count invalid-rows)))))
+  (testing "audit-enum-key"
+    (testing "invalidates trip when key does not exist (should be a limited
+             case now that this uses defrecord"
+      (is (= false (:valid (audit-enum-key {:foo "bar"} validation-column valid-set)))))
 
-    (testing "adds {:valid false} when the value of the column is not in the verification set"
-      (let [invalid-rows (filter
-                           (fn [row] (contains? row :valid))
-                           (audit-enum-column invalidrecords99 validation-column valid-set))]
-      (is (= 1 (count invalid-rows)))))
+    (testing "invalidates the trip when the value is not in the verification set"
+      (is (= false (:valid (audit-enum-key {validation-column (inc (last valid-set))} validation-column valid-set)))))
 
-    (testing "does not add any :valid keys to the map if the rows are valid"
-      (let [invalid-rows (filter
-                           (fn [row] (contains? row :valid))
-                           (audit-enum-column validrecords99 validation-column valid-set))]
-      (is (= 0 (count invalid-rows)))))))
+    (testing "does not invalidate when the value is in the validation set"
+      (is (= nil (:valid (audit-enum-key {validation-column (last valid-set)} validation-column valid-set))))))
 
-(deftest audit-enum-test
-  (testing "a higher order, more specific, fx to check all known discrete columns"
-
-    (testing "unary version calls is legal and calls binary version of itself"
-      (with-spy [audit-enum-column]
-        (audit-enum validrecords99)
-
-        (let [calls (bond/calls audit-enum-column)]
-          (testing "all enum columns are passed in to audit-enum"
-            (is (= (map last valid-enum-columns) (map second (map :args calls)))))
-          (testing "valid-enum-columns is called for each column specified"
-            (is (= (count valid-enum-columns) (count calls)))))))
-
-    (testing "binary version can be called directly"
-      (with-spy [audit-enum-column]
-        (audit-enum validrecords99 [[valid-vendor-values :vendor_id]])
-
-        (let [calls (bond/calls audit-enum-column)]
-          (testing "all enum columns are passed in to audit-enum"
-            (is (= [:vendor_id] (map second (map :args calls)))))
-          (testing "valid-enum-columns is called for each column specified"
-            (is (= 1 (count calls)))))))))
+    (deftest validate-trip-enum-keys-test
+      (testing "calls audit-enum-key for each key in the trip for each validation
+               specified in the validations variable"
+      (with-spy [audit-enum-key]
+          (validate-trip-enum-keys {:vendor_id 2} enum-validations-test)
+        (let [calls (bond/calls audit-enum-key)]
+          ;(is (= (count calls) 3))
+          (is (= (count calls) (count (keys enum-validations-test)))))))))
 
 (deftest dropoff-after-pickup?-test
   (with-test
@@ -161,8 +104,8 @@
         (let [calls (bond/calls audit-row-relationship)]
           (is (= (count validrecords99) (count calls))))))))
 
-(deftest validatate-rows-test
-    (testing "after calling all audit functions, :valid is assoc'd to the row"
-      ; NOTE: this just checks the count of not nil :valid keys. Not a great
-      ; test. Still learning Clojure
-      (is (= 99 (count (filter #(not (= nil %)) (map :valid (validate-rows validrecords99))))))))
+;(deftest validatate-rows-test
+    ;(testing "after calling all audit functions, :valid is assoc'd to the row"
+      ;; NOTE: this just checks the count of not nil :valid keys. Not a great
+      ;; test. Still learning Clojure
+      ;(is (= 99 (count (filter #(not (= nil %)) (map :valid (validate-rows validrecords99))))))))

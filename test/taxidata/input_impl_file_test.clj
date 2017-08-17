@@ -4,14 +4,37 @@
             [taxidata.core :refer :all]
             [taxidata.input-impl-file :refer :all]
             [bond.james :as bond :refer [with-spy]]))
+
+(deftest to_int-test
+  (testing "takes in a value and coerces it to an int when possible or throws
+           an error if not possible"
+    (is (= 0 (to_int "0")))
+    (is (thrown? java.lang.NumberFormatException (to_int "snorkle")))))
+
+(deftest to_dec-test
+  (testing "takes in a value and coerces it to a fixed width decimal or throws
+           an error if not possible"
+    (is (= 0.0 (to_dec "0.0")))
+    (is (thrown? java.lang.NumberFormatException (to_dec "snorkle")))))
+
 (with-test
-  (def rows (import-file "data/trip_2016_06-10.csv"))
-  (def first-row (first rows))
+  (def all-returns (atom ()))
+  (defn callbk
+    [trip]
+    (swap! all-returns conj trip))
 
-  (testing "imports 9 rows of valid data"
-    (is (= 9 (count rows))))
+  (def rows (reduce conj
+                    ()
+                    (create-trips-from-file "data/trip_2016_06-10.csv" callbk)))
 
-  (testing "after file is imported, data in file is converted as a map"
+  (def first-row (last @all-returns))
+
+  (testing "imports 9 rows of data"
+    (is (= 9 (count @all-returns))))
+
+  (testing "A file of raw rows is read, converted to a TaxTrip and converted
+           to the right values"
+
     (is (instance? taxidata.input_impl_file.TaxiTrip first-row))
 
     ; NOTE: these are extremely brittle tests, but I'm not sure of another way

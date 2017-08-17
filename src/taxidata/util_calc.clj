@@ -31,3 +31,14 @@
      (if (= 1 cnt)
        0
        (Math/sqrt (/ (apply + squares) (- cnt 1)))))))
+
+(defn extreme-numeric?
+  "determines if value is reasonable to include in analysis. For now extreme
+  is defined as 3 times the standard deviation. Magic number 3 is conventional
+  with respect to a normal distribution but non verification has been done to
+  confirm the values in this data are normal. Be sure to update the README if
+  validity criteria change"
+  [value mean stddev]
+  (> value (+ mean (* 3 stddev))))
+
+(def not-extreme-numeric? (complement extreme-numeric?))
