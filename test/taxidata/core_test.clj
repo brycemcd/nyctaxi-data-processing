@@ -6,16 +6,16 @@
             [bond.james :as bond :refer [with-spy]]))
 
 ;; NOTE: 99 records is helpful here to avoid influencing the mean and stddev
-  (def all-returns (atom ()))
-  (defn callbk
-    [trip]
-    (swap! all-returns conj trip))
+(def all-returns (atom ()))
+(defn callbk
+  [trip]
+  (swap! all-returns conj trip))
 
 (def validrecords99 (reverse (reduce conj
                                      ()
                                      (create-trips-from-file filename99 callbk))))
 
-  (def first-row (last @all-returns))
+(def first-row (last @all-returns))
 
 (deftest invalidate-test
   (with-test
@@ -60,9 +60,8 @@
       (testing "calls audit-enum-key for each key in the trip for each validation
                specified in the validations variable"
       (with-spy [audit-enum-key]
-          (validate-trip-enum-keys {:vendor_id 2} enum-validations-test)
+          (validate-trip-enum {:vendor_id 2} enum-validations-test)
         (let [calls (bond/calls audit-enum-key)]
-          ;(is (= (count calls) 3))
           (is (= (count calls) (count (keys enum-validations-test)))))))))
 
 (deftest dropoff-after-pickup?-test
@@ -89,23 +88,19 @@
     (def dropoff-after-pickup  {:tpep_pickup_datetime  (to_dttm "2017-07-02 18:00:00")
                                 :tpep_dropoff_datetime (to_dttm "2017-07-02 20:00:00")})
     (testing "row is invalidated if validation functions return false"
-      (is (= true (contains? (audit-row-relationship dropoff-before-pickup) :valid))))
+      (is (= true (contains? (validate-row-relationship dropoff-before-pickup) :valid))))
 
     (testing "row is validated if validation functions return true"
-      (is (= false (contains? (audit-row-relationship dropoff-after-pickup) :valid))))))
+      (is (= false (contains? (validate-row-relationship dropoff-after-pickup) :valid))))))
 
-(deftest audit-rows-relationship-test
-  (testing "when called with a seq of rows, each row is audited"
-    (with-spy [audit-row-relationship]
-      ; count is called here to realize the map function
-      (count (audit-rows-relationship validrecords99))
+(deftest validate-trip-test
+  (testing "base case, validations pass and :valid is applied to trip"
+    (is (= false (:valid (validate-trip (invalidate first-row :because)))))
+    (is (= true (:valid (validate-trip first-row)))))
 
-      (testing "all rows are passed to audit functions"
-        (let [calls (bond/calls audit-row-relationship)]
-          (is (= (count validrecords99) (count calls))))))))
-
-;(deftest validatate-rows-test
-    ;(testing "after calling all audit functions, :valid is assoc'd to the row"
-      ;; NOTE: this just checks the count of not nil :valid keys. Not a great
-      ;; test. Still learning Clojure
-      ;(is (= 99 (count (filter #(not (= nil %)) (map :valid (validate-rows validrecords99))))))))
+  (testing "all validation functions are called"
+    (with-spy [validate-row-relationship validate-trip-enum]
+      (validate-trip first-row)
+      ; NOTE: calls it once with each arity
+      (is (= 2 (count (bond/calls validate-trip-enum))))
+      (is (= 1 (count (bond/calls validate-row-relationship)))))))
