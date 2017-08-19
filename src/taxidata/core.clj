@@ -18,9 +18,9 @@
 (defn invalidate
   "Given a map, append :valid false and the reason for the invalidation to
   the map."
-  [row invalid-reason]
-  (let [reasons (or (:invalid-reason row) '())]
-    (assoc row :valid false :invalid-reason (cons invalid-reason reasons))))
+  [trip invalid-reason]
+  (let [reasons (or (:invalid-reason trip) '())]
+    (assoc trip :valid false :invalid-reason (cons invalid-reason reasons))))
 
 ; 1. Numerics
 
@@ -28,15 +28,42 @@
 ; have a function that is able to audit a single row
 
 ; TODO: be able to pull out numeric rows from input-impl-file/trip-types
-(def numeric-data-columns [:pickup_longitude
-                           :pickup_latitude
-                           :dropoff_longitude
-                           :dropoff_latitude
-                           :tip_amount
-                           :trip_distance
-                           :fare_amount
-                           :tolls_amount
-                           :total_amount])
+; TODO: this hash should be calulated or a configuration value
+; NOTE: these are completely contrived values right now
+(def numeric-validations
+  "A hash returning relevant values for validating the continuous numeric
+  values"
+  {:pickup_longitude {:mean 40.760936737060547 :stddev 2}
+   :pickup_latitude {:mean -73.983360290527344 :stddev 2}
+   :dropoff_longitude {:mean 40.760936737060547 :stddev 2}
+   :dropoff_latitude {:mean -73.983360290527344 :stddev 2}
+   :tip_amount {:mean 10 :stddev 3}
+   :trip_distance {:mean 2 :stddev 2}
+   :fare_amount {:mean 2 :stddev 2}
+   :tolls_amount {:mean 2 :stddev 2}
+   :total_amount {:mean 2 :stddev 2}
+   })
+
+(defn audit-continuous-key
+  "Checks the value of a key is within the tolerances we've defined and
+  invalidates extreme values. Designed to prevent analyzing values from
+  technical defects in the taxi meter or accidental hand-key inputs"
+  [trip column]
+  (if (calc/extreme-numeric? (column trip)
+                             (get-in numeric-validations [column :mean])
+                             (get-in numeric-validations [column :stddev]))
+    (invalidate trip column)
+    trip))
+
+(defn validate-trip-continuous
+  "For a single trip, validate that the values of keys that are continuous are
+  indeed not extreme. If not, return an invalidated trip record"
+  [trip]
+  (reduce (fn [agg-trip k]
+            (audit-continuous-key agg-trip k))
+          trip
+          (keys numeric-validations)))
+
 ; 2. enums
 ; Columns with known discrete values
 
@@ -86,29 +113,30 @@
               validations)))
 
 
-; 3. total row validation
+; 3. total trip validation
 ; TODO: some check should happen to validate that the fare, time in cab
 ; and distance relationship is somewhat rational
 
 (defn dropoff-after-pickup?
   "Asserts that pickup occurred after dropoff"
-  [row]
-  (.isBefore (:tpep_pickup_datetime row) (:tpep_dropoff_datetime row)))
+  [trip]
+  (.isBefore (:tpep_pickup_datetime trip) (:tpep_dropoff_datetime trip)))
 
-(defn validate-row-relationship
-  [row]
-  (if (dropoff-after-pickup? row)
-    row
-    (invalidate row :whole-row-validation)))
+(defn validate-trip-relationship
+  [trip]
+  (if (dropoff-after-pickup? trip)
+    trip
+    (invalidate trip :whole-trip-validation)))
 
 ; 4. Compose all auditing functions together
 (defn validate-trip
   "Higher order function to run all validations on a trip record. If all
   validations pass, then {:valid true} is assigned"
-  [row]
-  (let [validated-row (-> row
-                          validate-trip-enum
-                          validate-row-relationship)]
-    (if (contains? validated-row :valid)
-      row
-      (assoc row :valid true))))
+  [trip]
+  (let [validated-trip (-> trip
+                           validate-trip-enum
+                           validate-trip-continuous
+                           validate-trip-relationship)]
+    (if (contains? validated-trip :valid)
+      validated-trip
+      (assoc validated-trip :valid true))))

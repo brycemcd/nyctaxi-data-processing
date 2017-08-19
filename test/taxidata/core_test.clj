@@ -3,7 +3,8 @@
             [taxidata.core :refer :all]
             [taxidata.scratch :refer :all]
             [taxidata.input-impl-file :refer :all]
-            [bond.james :as bond :refer [with-spy]]))
+            [taxidata.util-calc :as calc]
+            [bond.james :as bond :refer [with-spy with-stub!]]))
 
 ;; NOTE: 99 records is helpful here to avoid influencing the mean and stddev
 (def all-returns (atom ()))
@@ -38,6 +39,26 @@
         (is (= invalid-col (first invalid-reasons)))
         (is (= invalid-col2 (second invalid-reasons)))
         (is (= 2 (count invalid-reasons)))))))
+
+(deftest audit-continuous-key-test
+  (def numeric-column :tip_amount)
+  (testing "base case. A tip_amount within 3 stddevs should be considered
+           reasonable"
+    (is (= nil (:valid (audit-continuous-key first-row numeric-column)))))
+
+  (testing "when a numeric is extreme, :valid false should be applied"
+    (with-stub! [[calc/extreme-numeric? (fn [_ _ _] true)]]
+      (let [returned-trip (audit-continuous-key first-row numeric-column)]
+        (is (= numeric-column (first (:invalid-reason returned-trip))))
+        (is (= false (:valid returned-trip)))))))
+
+(deftest validate-trip-continuous-test
+  (testing "calls audit-continuous-key for each key in the trip for each validation
+           specified as a numeric-validation"
+  (with-spy [audit-continuous-key]
+      (validate-trip-continuous first-row)
+    (let [calls (bond/calls audit-continuous-key)]
+      (is (= (count calls) (count (keys numeric-validations))))))))
 
 (with-test
   (def validation-column :vendor_id)
@@ -80,7 +101,7 @@
       (is (= false (dropoff-after-pickup? invaliddropoff))))))
 
 ; FIXME: for reasons I can't comprehend, audit-row-relationship-test NEVER returns failed tests (false positive!)
-(deftest audit-row-test
+(deftest validate-trip-test
   (with-test
     (def dropoff-before-pickup {:tpep_pickup_datetime  (to_dttm "2017-07-02 18:00:00")
                                 :tpep_dropoff_datetime (to_dttm "2017-07-02 14:00:00")})
@@ -88,19 +109,26 @@
     (def dropoff-after-pickup  {:tpep_pickup_datetime  (to_dttm "2017-07-02 18:00:00")
                                 :tpep_dropoff_datetime (to_dttm "2017-07-02 20:00:00")})
     (testing "row is invalidated if validation functions return false"
-      (is (= true (contains? (validate-row-relationship dropoff-before-pickup) :valid))))
+      (is (= true (contains? (validate-trip-relationship dropoff-before-pickup) :valid))))
 
     (testing "row is validated if validation functions return true"
-      (is (= false (contains? (validate-row-relationship dropoff-after-pickup) :valid))))))
+      (is (= false (contains? (validate-trip-relationship dropoff-after-pickup) :valid))))))
 
 (deftest validate-trip-test
   (testing "base case, validations pass and :valid is applied to trip"
-    (is (= false (:valid (validate-trip (invalidate first-row :because)))))
-    (is (= true (:valid (validate-trip first-row)))))
+
+    (def valid-row
+      (assoc first-row
+             :dropoff_latitude (get-in numeric-validations [:dropoff_latitude :mean])
+             :pickup_latitude (get-in numeric-validations [:pickup_latitude :mean])))
+
+    (is (= false (:valid (validate-trip (invalidate valid-row :because)))))
+    (is (= true (:valid (validate-trip valid-row)))))
 
   (testing "all validation functions are called"
-    (with-spy [validate-row-relationship validate-trip-enum]
+    (with-spy [validate-trip-relationship validate-trip-enum validate-trip-continuous]
       (validate-trip first-row)
       ; NOTE: calls it once with each arity
       (is (= 2 (count (bond/calls validate-trip-enum))))
-      (is (= 1 (count (bond/calls validate-row-relationship)))))))
+      (is (= 1 (count (bond/calls validate-trip-continuous))))
+      (is (= 1 (count (bond/calls validate-trip-relationship)))))))
