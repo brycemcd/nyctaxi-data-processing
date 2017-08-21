@@ -8,4 +8,5 @@
                  [clj-time "0.13.0"]
                  [kixi/stats "0.3.8"]
                  [circleci/bond "0.3.0"]
+                 [cprop "0.1.11"]
                  ])

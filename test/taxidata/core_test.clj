@@ -58,7 +58,7 @@
   (with-spy [audit-continuous-key]
       (validate-trip-continuous first-row)
     (let [calls (bond/calls audit-continuous-key)]
-      (is (= (count calls) (count (keys numeric-validations))))))))
+      (is (= (count calls) (count (keys (last (first numeric-validations))))))))))
 
 (with-test
   (def validation-column :vendor_id)
@@ -119,8 +119,8 @@
 
     (def valid-row
       (assoc first-row
-             :dropoff_latitude (get-in numeric-validations [:dropoff_latitude :mean])
-             :pickup_latitude (get-in numeric-validations [:pickup_latitude :mean])))
+             :dropoff_latitude (get-in numeric-validations [1 :dropoff_latitude :mean])
+             :pickup_latitude (get-in numeric-validations [1 :pickup_latitude :mean])))
 
     (is (= false (:valid (validate-trip (invalidate valid-row :because)))))
     (is (= true (:valid (validate-trip valid-row)))))
@@ -128,7 +128,6 @@
   (testing "all validation functions are called"
     (with-spy [validate-trip-relationship validate-trip-enum validate-trip-continuous]
       (validate-trip first-row)
-      ; NOTE: calls it once with each arity
-      (is (= 2 (count (bond/calls validate-trip-enum))))
+      (is (= 1 (count (bond/calls validate-trip-enum))))
       (is (= 1 (count (bond/calls validate-trip-continuous))))
       (is (= 1 (count (bond/calls validate-trip-relationship)))))))

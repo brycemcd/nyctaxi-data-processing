@@ -12,6 +12,7 @@
             [clj-time.format :as dttm_f]
             [kixi.stats.core :as stats]
             [taxidata.util-calc :as calc]
+            [cprop.core :refer [load-config]]
             ))
 
 ; 0. Invalidation
@@ -22,38 +23,30 @@
   (let [reasons (or (:invalid-reason trip) '())]
     (assoc trip :valid false :invalid-reason (cons invalid-reason reasons))))
 
-; 1. Numerics
-
-; TODO: This has to be re-done to use pre-calculated means and stddevs and then
-; have a function that is able to audit a single row
-
+; 1. Continuous Numbers
 ; TODO: be able to pull out numeric rows from input-impl-file/trip-types
 ; TODO: this hash should be calulated or a configuration value
 ; NOTE: these are completely contrived values right now
 (def numeric-validations
   "A hash returning relevant values for validating the continuous numeric
   values"
-  {:pickup_longitude {:mean 40.760936737060547 :stddev 2}
-   :pickup_latitude {:mean -73.983360290527344 :stddev 2}
-   :dropoff_longitude {:mean 40.760936737060547 :stddev 2}
-   :dropoff_latitude {:mean -73.983360290527344 :stddev 2}
-   :tip_amount {:mean 10 :stddev 3}
-   :trip_distance {:mean 2 :stddev 2}
-   :fare_amount {:mean 2 :stddev 2}
-   :tolls_amount {:mean 2 :stddev 2}
-   :total_amount {:mean 2 :stddev 2}
-   })
+  (load-config :file "numeric-validations.edn"))
+
+(defn- math-for-ratecode
+  "get necessary number for numeric-validation"
+  [trip column number-needed]
+  (get-in numeric-validations [(:ratecode_id trip) column number-needed]))
 
 (defn audit-continuous-key
   "Checks the value of a key is within the tolerances we've defined and
   invalidates extreme values. Designed to prevent analyzing values from
   technical defects in the taxi meter or accidental hand-key inputs"
   [trip column]
-  (if (calc/extreme-numeric? (column trip)
-                             (get-in numeric-validations [column :mean])
-                             (get-in numeric-validations [column :stddev]))
-    (invalidate trip column)
-    trip))
+  (let [trip-type-mean   (math-for-ratecode trip column :mean)
+        trip-type-stddev (math-for-ratecode trip column :stddev)]
+    (if (calc/extreme-numeric? (column trip) trip-type-mean trip-type-stddev)
+      (invalidate trip column)
+      trip)))
 
 (defn validate-trip-continuous
   "For a single trip, validate that the values of keys that are continuous are
@@ -62,7 +55,8 @@
   (reduce (fn [agg-trip k]
             (audit-continuous-key agg-trip k))
           trip
-          (keys numeric-validations)))
+          ; NOTE: this gets :tip_amount etc from the numeric-validations hash
+          (keys (last (first numeric-validations)))))
 
 ; 2. enums
 ; Columns with known discrete values
@@ -103,14 +97,11 @@
   "For a single trip, validate that the values of keys that should be one of a
   specific value is indeed in that set of values. If not, return an invalidated
   trip record"
-  ([trip]
-   (validate-trip-enum trip enum-validations))
-
-  ([trip validations]
-   (reduce-kv (fn [agg-trip k validation-set]
-                (audit-enum-key agg-trip k validation-set))
-              trip
-              validations)))
+  [trip validations]
+  (reduce-kv (fn [agg-trip k validation-set]
+               (audit-enum-key agg-trip k validation-set))
+             trip
+             validations))
 
 
 ; 3. total trip validation
@@ -134,7 +125,7 @@
   validations pass, then {:valid true} is assigned"
   [trip]
   (let [validated-trip (-> trip
-                           validate-trip-enum
+                           (validate-trip-enum enum-validations)
                            validate-trip-continuous
                            validate-trip-relationship)]
     (if (contains? validated-trip :valid)
