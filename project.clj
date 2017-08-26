@@ -9,4 +9,7 @@
                  [kixi/stats "0.3.8"]
                  [circleci/bond "0.3.0"]
                  [cprop "0.1.11"]
-                 ])
+                 ]
+  :uberjar {:main [taxidata.main]
+            :aot [taxidata.main]}
+  )

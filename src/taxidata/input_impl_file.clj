@@ -5,7 +5,6 @@
   (:require
             [clj-time.format :as dttm_f]
             [taxidata.core :refer :all]
-            [taxidata.scratch :as scratch]
   ))
 
 ; NOTE: if/when another input type is created, these functions and trip-types
@@ -51,11 +50,12 @@
  "Just the keys of trip-types. Should be the same as a header in a data file"
  (map first trip-types))
 
-(defrecord TaxiTrip [vendor_id tpep_pickup_datetime tpep_dropoff_datetime
-                passenger_count trip_distance pickup_longitude pickup_latitude
-                ratecode_id store_and_fwd_flag dropoff_longitude dropoff_latitude
-                payment_type fare_amount extra mta_tax tip_amount tolls_amount
-                improvement_surcharge total_amount])
+(defrecord TaxiTrip
+  [vendor_id tpep_pickup_datetime tpep_dropoff_datetime
+   passenger_count trip_distance pickup_longitude pickup_latitude
+   ratecode_id store_and_fwd_flag dropoff_longitude dropoff_latitude
+   payment_type fare_amount extra mta_tax tip_amount tolls_amount
+   improvement_surcharge total_amount])
 
 (defn- split-row
   "splits a csv row on the comma"

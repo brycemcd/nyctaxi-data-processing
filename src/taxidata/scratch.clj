@@ -1,7 +1,9 @@
 (ns taxidata.scratch
   "An area where I can dump silly scripts to check other functions I'm writing
   in core"
-  (:require [taxidata.core :as core]
+  (:require
+            ;[taxidata.core :as core]
+            [taxidata.input-impl-file :as taxiio]
             ))
 ;NOTE: it munges the trip_type keys into any order
 
@@ -87,3 +89,80 @@
 ; and come up with a fare / distance / tip algo to detect extreme values. It's
 ; likely a multi-modal distribution and auditing the data should appreciate that
 ; phenomenon
+
+
+
+
+
+
+; 2017-08-20
+; read in the file, print valid records to a file and invalid to another file
+;(def valid-file (clojure.java.io/writer "valid.csv"))
+;(def invalid-file (clojure.java.io/writer "invalid.csv"))
+;(.close valid-file)
+;(.close invalid-file)
+
+;(def all-returns (atom ()))
+;(defn callbk
+  ;[trip]
+  ;(swap! all-returns conj trip))
+
+;(def validrecords99 (reverse (reduce conj
+                                     ;()
+                                     ;(taxidata.input-impl-file/create-trips-from-file filename99 callbk))))
+
+;(def first-row (last @all-returns))
+(def valid-file "valid.csv")
+(def invalid-file "invalid.csv")
+
+(defn stringify-column
+  [trip col]
+  (if (= col :invalid-reason)
+    (reduce (fn [aggr col] (str aggr col)) "" (col trip))
+    (col trip)))
+
+(defn trip-to-csv
+  [trip]
+  (let [columns [:vendor_id
+                 :tpep_pickup_datetime
+                 :tpep_dropoff_datetime
+                 :passenger_count
+                 :trip_distance
+                 :pickup_longitude
+                 :pickup_latitude
+                 :ratecode_id
+                 :store_and_fwd_flag
+                 :dropoff_longitude
+                 :dropoff_latitude
+                 :payment_type
+                 :fare_amount
+                 :extra
+                 :mta_tax
+                 :tip_amount
+                 :tolls_amount
+                 :improvement_surcharge
+                 :total_amount
+                 :valid
+                 :invalid-reason]]
+    (reduce (fn [aggr col]
+              (if (= aggr "")
+                (stringify-column trip col)
+                (str aggr "," (stringify-column trip col))))
+            ""
+            columns)))
+(defn read-validate-csv
+  [trip]
+  (let [valtrip (taxidata.core/validate-trip trip)]
+     (println (str (trip-to-csv valtrip) "\n"))))
+
+(defn write-trip-to-file
+  [trip]
+  (let [val-trip (taxidata.core/validate-trip trip)
+        file (if (:valid val-trip) valid-file invalid-file)]
+     (spit file (str (trip-to-csv val-trip) "\n") :append true)))
+
+; invocation:
+; be sure to truncate the valid and invalid files
+; (require 'taxidata.scratch :reload)
+;(taxiio/create-trips-from-file filename9 write-trip-to-file)
+;(taxiio/create-trips-from-file filename9 read-validate-csv)

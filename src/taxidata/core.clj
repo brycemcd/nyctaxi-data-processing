@@ -63,7 +63,10 @@
 
 (def valid-vendor-values #{1 2})
 (def valid-improvement-surcharge  #{0.0 0.3})
-(def valid-mta-tax #{0.5})
+; TODO: add 0 && rate code 3 as a whole row validation
+(def valid-mta-tax
+  "trips to/from Newark may be exempt from tax"
+  #{0.0 0.5})
 (def valid-extra
   "The data dictionary indicates 0.5 and 1.0 are valid values and kind of
   suggests that 0.0 might be valid as well. ~ 1/2 the data include 0.0 so I'll

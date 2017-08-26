@@ -7,7 +7,8 @@
   :tip_amount {:mean 1.6824316968966781 :stddev 2.2557777668655339}
   :trip_distance {:mean 2.6638182373430271 :stddev 22.0007280185743064}
   :fare_amount {:mean 12.2921834784805965 :stddev 276.435135825115}
-  :tolls_amount {:mean 0.20964097976321116234 :stddev 1.2408275480925973}
+  ; See note in README 2017-08-20. Setting these values to be f(tolls | tolls > 0)
+  :tolls_amount {:mean 6.0080341199940374 :stddev 4.2623379982223657}
   :total_amount {:mean 15.3175169411925908 :stddev 276.706655404693}
   }
 
