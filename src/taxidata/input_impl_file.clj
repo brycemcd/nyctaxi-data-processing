@@ -73,12 +73,23 @@
   [mapd-row]
   (into {} (map cast-keypair mapd-row)))
 
-(defn- create-trip
-  "creates a TaxiTrip from a raw line of data in the file"
+(defn- is-file-header
+  "if raw line matches the known header value of VendorID, then this line
+  is header line"
+  [line]
+  (re-matches #"VendorID.*" line))
+
+(defn create-trip
+  "creates a TaxiTrip from a raw line of data in the file. If line passed in
+  is a header line, it should be discarded"
   [line]
   ; convert the raw row into a map, then TaxiTrip with the wrong types cast
-  (let [primTT (zipmap trip-header (split-row line))]
-    (map->TaxiTrip (cast-row primTT))))
+  (if-not (is-file-header line)
+    (->> line
+         split-row
+         (zipmap trip-header)
+         cast-row
+         map->TaxiTrip)))
 
 ; NOTE: feels like I want a transducer here
 (defn create-trips-from-file
@@ -90,4 +101,5 @@
   [file callbackfx]
   (with-open [rdr (clojure.java.io/reader file)]
     (doseq [line (line-seq rdr)]
-      (callbackfx (create-trip line)))))
+      (if-let [not-header (create-trip line)]
+        (callbackfx not-header)))))

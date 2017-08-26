@@ -13,6 +13,28 @@ The focus of this project is processing the yellow cab trip data. A data
 dictionary for this set can be [found at
 nyc.gov](http://www.nyc.gov/html/tlc/downloads/pdf/data_dictionary_trip_records_yellow.pdf).
 
+## Invocation
+
+This code is meant to be run from the command line. It has been tested
+on linux (Ubuntu) systems with the following java build:
+
+```java version
+"1.8.0_131"
+Java(TM) SE Runtime Environment (build 1.8.0_131-b11)
+Java HotSpot(TM) 64-Bit Server VM (build 25.131-b11, mixed mode)
+```
+
+`java -jar target/taxidata-<version>-standalone.jar yellow_tripdata_2016-06.csv valid.csv invalid.csv`
+
+`yellow_tripdata_2016-06.csv` is a downloaded csv from TLCs download site
+
+`valid.csv` is a file where valid data will be stored
+
+`invalid.csv` is a file where trips that are deemed to be invalid are
+stored
+
+Create the jar using lein if it is not present in `target/`: `lein uberjar`
+
 ## Validity
 
 For the purposes of analysis, data is processed for inclusion of
@@ -40,7 +62,6 @@ insufficient comparison and result in far more false negative validations
 For now, keeping it simple and pretending that no drift in the data exists.
 I'm fixing other defects in the software and concentrating on creating
 the proper interfaces before tackling this problem.
-
 
 ## Validation Notes
 

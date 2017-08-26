@@ -5,6 +5,9 @@
             [taxidata.input-impl-file :refer :all]
             [bond.james :as bond :refer [with-spy]]))
 
+(def file-header
+  "VendorID,tpep_pickup_datetime,tpep_dropoff_datetime,passenger_count,trip_distance,pickup_longitude,pickup_latitude,RatecodeID,store_and_fwd_flag,dropoff_longitude,dropoff_latitude,payment_type,fare_amount,extra,mta_tax,tip_amount,tolls_amount,improvement_surcharge,total_amount")
+
 (deftest to_int-test
   (testing "takes in a value and coerces it to an int when possible or throws
            an error if not possible"
@@ -16,6 +19,10 @@
            an error if not possible"
     (is (= 0.0 (to_dec "0.0")))
     (is (thrown? java.lang.NumberFormatException (to_dec "snorkle")))))
+
+(deftest create-trip-test
+  (testing "returns nil if file header is found"
+    (is (= nil (create-trip file-header)))))
 
 (with-test
   (def all-returns (atom ()))
