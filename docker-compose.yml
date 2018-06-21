@@ -1,0 +1,36 @@
+# Intended for development
+version: '2'
+services:
+#  lein_test:
+#    build: .
+#    command: lein auto test
+#    volumes:
+#      - .:/app
+#    container_name: lein_test
+#
+  lein_repl:
+    build: .
+    entrypoint: lein repl
+    volumes:
+      - .:/app
+    container_name: lein_repl
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+      - "2888:2888"
+      - "3888:3888"
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # NOTE: This is my local IP address. Change it to be yours.
+      KAFKA_ADVERTISED_HOST_NAME: 10.1.2.206
+      KAFKA_ZOOKEEPER_CONNECT: 10.1.2.206:2181
+      KAFKA_CREATE_TOPICS: inbound-trip-events:1:3,valid-trip-events:1:3,invalid-trip-events:1:2,test-kaf:1:1
+      KAFKA_HEAP_OPTS: -Xmx16G -Xms16G -XX:MaxGCPauseMillis=200 -XX:ParallelGCThreads=20 -XX:ConcGCThreads=5 -XX:InitiatingHeapOccupancyPercent=70
+#      KAFKA_HEAP_OPTS: -Xmx16G -Xms16G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:ParallelGCThreads=20 -XX:ConcGCThreads=5 -XX:InitiatingHeapOccupancyPercent=70
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

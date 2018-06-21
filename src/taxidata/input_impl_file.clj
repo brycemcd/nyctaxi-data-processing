@@ -73,7 +73,7 @@
   [mapd-row]
   (into {} (map cast-keypair mapd-row)))
 
-(defn- is-file-header
+(defn is-file-header
   "if raw line matches the known header value of VendorID, then this line
   is header line"
   [line]

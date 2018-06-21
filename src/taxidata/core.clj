@@ -126,6 +126,7 @@
 (defn validate-trip
   "Higher order function to run all validations on a trip record. If all
   validations pass, then {:valid true} is assigned"
+
   [trip]
   (let [validated-trip (-> trip
                            (validate-trip-enum enum-validations)
