@@ -77,7 +77,8 @@
   "if raw line matches the known header value of VendorID, then this line
   is header line"
   [line]
-  (re-matches #"VendorID.*" line))
+  ; TODO: add test
+  (re-matches #"VendorID.*" (clojure.string/trim-newline line)))
 
 (defn create-trip
   "creates a TaxiTrip from a raw line of data in the file. If line passed in
