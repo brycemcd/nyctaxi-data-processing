@@ -1,0 +1,13 @@
+{
+  :kafka-hosts "kafka-01.somefqdn.tld:9092,kafka-02.somefqdn.tld:9092"
+  :inbound-event-topic "inbound-trip-events"
+  :valid-event-topic "valid-trip-events"
+  :invalid-event-topic "invalid-trip-events"
+  :inbound-event-consumer-map {
+    ; NOTE: these are actually string keys because we're using the Java
+    ; Kafka API client
+    "group.id" "taxi-validation-consumer"
+    "auto.offset.reset" "earliest"
+    "enable.auto.commit" true
+  }
+}
