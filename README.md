@@ -15,6 +15,8 @@ nyc.gov](http://www.nyc.gov/html/tlc/downloads/pdf/data_dictionary_trip_records_
 
 ## Invocation
 
+### With Files
+
 This code is meant to be run from the command line. It has been tested
 on linux (Ubuntu) systems with the following java build:
 
@@ -35,9 +37,37 @@ stored
 
 Create the jar using lein if it is not present in `target/`: `lein uberjar`
 
+### With Kafka
+
+Use queue-configuration.edn to set up configuration params for reading
+and writing to/from queues.
+
+Raw events from the export files can be written to a Kafka queue by
+starting up a repl and executing:
+
+```clojure
+(use 'taxidata.input-impl-kafka :reload-all)
+(main "data/yellow_trip_data_2016_06.csv")
+```
+
+Once raw events have been written to the inbound event queue, validation
+can take place by invoking:
+
+```clojure
+(use 'taxidata.validate-from-queue :reload-all)
+(process-events-to-validation-queues)
+```
+
+As the program runs, valid events will be written to the Kafka topic
+defined as `:valid-event-topic` in the queue configuration file and
+invalid events will be written to `:invalid-event-topic` as defined in
+the same file.
+
+**Note that inbound events are written as their raw line separated
+strings (one message per line) and _everything_ else written to or read
+from topics in this project should be json**
+
 ## Running Tests
-
-
 
 ## Validity
 
@@ -66,6 +96,16 @@ insufficient comparison and result in far more false negative validations
 For now, keeping it simple and pretending that no drift in the data exists.
 I'm fixing other defects in the software and concentrating on creating
 the proper interfaces before tackling this problem.
+
+
+## Development Setup
+
+Setup Kafka, Zookeeper and a lein repl by invoking:
+
+`docker-compose down && docker-compose up`
+
+In development, I run that command on a small cluster of three machines
+when I'm testing the performance of > 1M records.
 
 ## Validation Notes
 
