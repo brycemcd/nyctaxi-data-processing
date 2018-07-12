@@ -87,9 +87,9 @@
   "Reads events and parses them into trips in a batch. Higher order f(x) to
   compose a lot of smaller f(x)s"
   []
-  (map create-validated-trip-from-raw-event
+  (pmap create-validated-trip-from-raw-event
     (remove is-file-header
-      (map get-value-from-consumer-record (read-batch-from-inbound-queue)))))
+      (pmap get-value-from-consumer-record (read-batch-from-inbound-queue)))))
 
 (defn process-events-to-validation-queues
   "Read a batch of trips, validate the batch, write them to the valid/invalid queue"
@@ -97,5 +97,5 @@
   (loop []
     ; the map statement does not realize the lazy seq created. Doall forces it
     (doall
-      (map write-to-validation-queue (convert-batch-to-validated-trip-events)))
+      (pmap write-to-validation-queue (convert-batch-to-validated-trip-events)))
     (recur))))

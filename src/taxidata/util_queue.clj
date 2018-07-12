@@ -43,15 +43,20 @@
     (client/send! producer topic nil value)))
 
 (defn consumer-generic
-  ""
+  "A generic consumer configuration. Provide a config in order to pull batches
+  of messages off a queue
+
+  config: map providing KafkaConsumer configuration options (see Kafka java docs)
+  topic: string name of topic to consume
+  "
   [config topic]
   (doto (KafkaConsumer. config)
     (.subscribe [topic])))
 
 (def consumer-generic-cfg
-  ""
+  "Generic config with sensible defaults"
   {"group.id" kafka-group-id
-   "auto.offset.reset" "earliest"
+   "auto.offset.reset" "latest"
    "key.deserializer" StringDeserializer
    "value.deserializer" StringDeserializer})
 
